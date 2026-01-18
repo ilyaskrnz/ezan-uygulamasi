@@ -11,6 +11,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useLanguage } from '../src/i18n/LanguageContext';
 
 // Dynamic import for expo-location (not available on web)
 let Location: any = null;
@@ -33,17 +35,13 @@ interface DayPrayer {
 }
 
 export default function MonthlyScreen() {
+  const { t } = useLanguage();
   const [monthlyData, setMonthlyData] = useState<DayPrayer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth() + 1);
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
-
-  const months = [
-    'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
-    'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'
-  ];
 
   useEffect(() => {
     initializeData();
@@ -57,6 +55,19 @@ export default function MonthlyScreen() {
 
   const initializeData = async () => {
     try {
+      // Check for saved city first
+      const savedCity = await AsyncStorage.getItem('selectedCity');
+      if (savedCity) {
+        const city = JSON.parse(savedCity);
+        setLocation({ lat: city.latitude, lng: city.longitude });
+        return;
+      }
+
+      if (Platform.OS === 'web' || !Location) {
+        setLocation({ lat: 41.0082, lng: 28.9784 }); // Default Istanbul
+        return;
+      }
+
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         setLocation({ lat: 41.0082, lng: 28.9784 }); // Default Istanbul
@@ -93,7 +104,7 @@ export default function MonthlyScreen() {
       }
     } catch (err) {
       console.error('Monthly data error:', err);
-      setError('Aylık vakitler alınamadı');
+      setError(t.monthly.error);
     } finally {
       setLoading(false);
     }
@@ -131,7 +142,7 @@ export default function MonthlyScreen() {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Aylık Vakitler</Text>
+        <Text style={styles.title}>{t.monthly.title}</Text>
         
         {/* Month Navigator */}
         <View style={styles.monthNavigator}>
@@ -139,7 +150,7 @@ export default function MonthlyScreen() {
             <Ionicons name="chevron-back" size={24} color="#D4AF37" />
           </TouchableOpacity>
           <Text style={styles.monthText}>
-            {months[currentMonth - 1]} {currentYear}
+            {t.months[currentMonth - 1]} {currentYear}
           </Text>
           <TouchableOpacity onPress={nextMonth} style={styles.navButton}>
             <Ionicons name="chevron-forward" size={24} color="#D4AF37" />
@@ -150,27 +161,27 @@ export default function MonthlyScreen() {
       {loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#D4AF37" />
-          <Text style={styles.loadingText}>Vakitler yükleniyor...</Text>
+          <Text style={styles.loadingText}>{t.monthly.loading}</Text>
         </View>
       ) : error ? (
         <View style={styles.errorContainer}>
           <Ionicons name="warning" size={48} color="#FF6B6B" />
           <Text style={styles.errorText}>{error}</Text>
           <TouchableOpacity style={styles.retryButton} onPress={fetchMonthlyData}>
-            <Text style={styles.retryText}>Tekrar Dene</Text>
+            <Text style={styles.retryText}>{t.monthly.retry}</Text>
           </TouchableOpacity>
         </View>
       ) : (
         <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
           {/* Table Header */}
           <View style={styles.tableHeader}>
-            <Text style={[styles.headerCell, styles.dateCell]}>Tarih</Text>
-            <Text style={styles.headerCell}>İmsak</Text>
-            <Text style={styles.headerCell}>Güneş</Text>
-            <Text style={styles.headerCell}>Öğle</Text>
-            <Text style={styles.headerCell}>İkindi</Text>
-            <Text style={styles.headerCell}>Akşam</Text>
-            <Text style={styles.headerCell}>Yatsı</Text>
+            <Text style={[styles.headerCell, styles.dateCell]}>{t.monthly.date}</Text>
+            <Text style={styles.headerCell}>{t.prayers.fajr}</Text>
+            <Text style={styles.headerCell}>{t.prayers.sunrise}</Text>
+            <Text style={styles.headerCell}>{t.prayers.dhuhr}</Text>
+            <Text style={styles.headerCell}>{t.prayers.asr}</Text>
+            <Text style={styles.headerCell}>{t.prayers.maghrib}</Text>
+            <Text style={styles.headerCell}>{t.prayers.isha}</Text>
           </View>
 
           {/* Table Body */}
@@ -220,7 +231,7 @@ export default function MonthlyScreen() {
 
           <View style={styles.footer}>
             <Text style={styles.footerText}>
-              * Vakitler Diyanet İşleri Başkanlığı hesaplama metoduna göre hesaplanmıştır.
+              {t.monthly.footer}
             </Text>
           </View>
         </ScrollView>
