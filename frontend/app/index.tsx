@@ -70,17 +70,17 @@ export default function HomeScreen() {
     }
   }, [prayerData, currentTime, t]);
 
-  // Initialize notifications
-  useEffect(() => {
-    notificationService.initialize();
-  }, []);
+  // Initialize notifications - disabled for Expo Go compatibility
+  // useEffect(() => {
+  //   notificationService.initialize();
+  // }, []);
 
-  // Schedule notifications when prayer data changes
-  useEffect(() => {
-    if (prayerData) {
-      notificationService.schedulePrayerNotifications(prayerData, t.notifications);
-    }
-  }, [prayerData, t]);
+  // Schedule notifications when prayer data changes - disabled for Expo Go
+  // useEffect(() => {
+  //   if (prayerData) {
+  //     notificationService.schedulePrayerNotifications(prayerData, t.notifications);
+  //   }
+  // }, [prayerData, t]);
 
   const calculateNextPrayer = () => {
     if (!prayerData) return;
