@@ -11,9 +11,15 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import * as Location from 'expo-location';
-import { Magnetometer } from 'expo-sensors';
 import axios from 'axios';
+
+// Dynamic imports for native modules (not available on web)
+let Location: any = null;
+let Magnetometer: any = null;
+if (Platform.OS !== 'web') {
+  Location = require('expo-location');
+  Magnetometer = require('expo-sensors').Magnetometer;
+}
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 
