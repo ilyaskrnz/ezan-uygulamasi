@@ -1,15 +1,6 @@
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Conditionally import expo-notifications
-let Notifications: any = null;
-let Device: any = null;
-
-if (Platform.OS !== 'web') {
-  Notifications = require('expo-notifications');
-  Device = require('expo-device');
-}
-
 export interface PrayerNotificationSettings {
   fajr: boolean;
   sunrise: boolean;
@@ -40,10 +31,13 @@ const DEFAULT_CONFIG: NotificationConfig = {
 
 class NotificationService {
   private config: NotificationConfig = DEFAULT_CONFIG;
+  private Notifications: any = null;
+  private Device: any = null;
+  private initialized: boolean = false;
 
   async initialize(): Promise<boolean> {
-    if (Platform.OS === 'web' || !Notifications || !Device) {
-      console.log('Notifications not available on this platform');
+    if (Platform.OS === 'web') {
+      console.log('Notifications not available on web');
       return false;
     }
 
@@ -51,45 +45,49 @@ class NotificationService {
       // Load saved config
       await this.loadConfig();
 
+      // Dynamic import for native only
+      try {
+        this.Notifications = require('expo-notifications');
+        this.Device = require('expo-device');
+      } catch (e) {
+        console.log('expo-notifications not available');
+        return false;
+      }
+
+      // Check if device is physical (notifications don't work on simulators)
+      if (!this.Device?.isDevice) {
+        console.log('Must use physical device for notifications');
+        return false;
+      }
+
       // Request permissions
-      if (Device.isDevice) {
-        const { status: existingStatus } = await Notifications.getPermissionsAsync();
-        let finalStatus = existingStatus;
+      const { status: existingStatus } = await this.Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
 
-        if (existingStatus !== 'granted') {
-          const { status } = await Notifications.requestPermissionsAsync();
-          finalStatus = status;
-        }
+      if (existingStatus !== 'granted') {
+        const { status } = await this.Notifications.requestPermissionsAsync();
+        finalStatus = status;
+      }
 
-        if (finalStatus !== 'granted') {
-          console.log('Notification permission denied');
-          return false;
-        }
+      if (finalStatus !== 'granted') {
+        console.log('Notification permission denied');
+        return false;
       }
 
       // Configure notification handler
-      Notifications.setNotificationHandler({
+      this.Notifications.setNotificationHandler({
         handleNotification: async () => ({
           shouldShowAlert: true,
           shouldPlaySound: this.config.sound !== 'silent',
-          shouldSetBadge: true,
+          shouldSetBadge: false,
         }),
       });
 
-      // Set up notification channel for Android
-      if (Platform.OS === 'android') {
-        await Notifications.setNotificationChannelAsync('prayer-times', {
-          name: 'Prayer Times',
-          importance: Notifications.AndroidImportance.HIGH,
-          vibrationPattern: [0, 250, 250, 250],
-          lightColor: '#D4AF37',
-          sound: this.config.sound === 'azan' ? 'azan.wav' : undefined,
-        });
-      }
-
+      this.initialized = true;
+      console.log('Notifications initialized successfully');
       return true;
     } catch (error) {
-      console.error('Error initializing notifications:', error);
+      console.log('Error initializing notifications:', error);
       return false;
     }
   }
@@ -101,7 +99,7 @@ class NotificationService {
         this.config = { ...DEFAULT_CONFIG, ...JSON.parse(savedConfig) };
       }
     } catch (error) {
-      console.error('Error loading notification config:', error);
+      console.log('Error loading notification config:', error);
     }
   }
 
@@ -110,7 +108,7 @@ class NotificationService {
       this.config = { ...this.config, ...config };
       await AsyncStorage.setItem('notificationConfig', JSON.stringify(this.config));
     } catch (error) {
-      console.error('Error saving notification config:', error);
+      console.log('Error saving notification config:', error);
     }
   }
 
@@ -137,13 +135,13 @@ class NotificationService {
       prayerTime: string;
     }
   ): Promise<void> {
-    if (Platform.OS === 'web' || !Notifications || !this.config.enabled) {
+    if (Platform.OS === 'web' || !this.initialized || !this.Notifications || !this.config.enabled) {
       return;
     }
 
     try {
       // Cancel all existing notifications
-      await Notifications.cancelAllScheduledNotificationsAsync();
+      await this.Notifications.cancelAllScheduledNotificationsAsync();
 
       const prayers = [
         { key: 'fajr', time: prayerTimes.fajr, title: translations.fajrTitle },
@@ -171,36 +169,38 @@ class NotificationService {
           continue;
         }
 
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: prayer.title,
-            body: translations.prayerTime,
-            sound: this.config.sound === 'azan' ? 'azan.wav' : true,
-            priority: Notifications.AndroidNotificationPriority.HIGH,
-          },
-          trigger: {
-            hour: hours,
-            minute: minutes,
-            repeats: false,
-          },
-        });
+        // Calculate seconds until prayer
+        const secondsUntil = Math.floor((prayerDate.getTime() - now.getTime()) / 1000);
+
+        if (secondsUntil > 0) {
+          await this.Notifications.scheduleNotificationAsync({
+            content: {
+              title: prayer.title,
+              body: translations.prayerTime,
+              sound: true,
+            },
+            trigger: {
+              seconds: secondsUntil,
+            },
+          });
+        }
       }
 
       console.log('Prayer notifications scheduled successfully');
     } catch (error) {
-      console.error('Error scheduling notifications:', error);
+      console.log('Error scheduling notifications:', error);
     }
   }
 
   async cancelAllNotifications(): Promise<void> {
-    if (Platform.OS === 'web' || !Notifications) {
+    if (Platform.OS === 'web' || !this.Notifications) {
       return;
     }
 
     try {
-      await Notifications.cancelAllScheduledNotificationsAsync();
+      await this.Notifications.cancelAllScheduledNotificationsAsync();
     } catch (error) {
-      console.error('Error canceling notifications:', error);
+      console.log('Error canceling notifications:', error);
     }
   }
 }
