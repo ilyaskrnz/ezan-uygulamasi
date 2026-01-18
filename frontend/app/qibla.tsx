@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
+import { useLanguage } from '../src/i18n/LanguageContext';
 
 // Dynamic imports for native modules (not available on web)
 let Location: any = null;
@@ -24,6 +25,7 @@ if (Platform.OS !== 'web') {
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 
 export default function QiblaScreen() {
+  const { t } = useLanguage();
   const [heading, setHeading] = useState(0);
   const [qiblaDirection, setQiblaDirection] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -53,6 +55,12 @@ export default function QiblaScreen() {
   }, [heading]);
 
   const initializeQibla = async () => {
+    if (Platform.OS === 'web' || !Location || !Magnetometer) {
+      setError(t.qibla.permissionRequired);
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
@@ -60,7 +68,7 @@ export default function QiblaScreen() {
       // Get location permission and coordinates
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        setError('Konum izni gerekli');
+        setError(t.qibla.permissionRequired);
         setLoading(false);
         return;
       }
@@ -90,15 +98,17 @@ export default function QiblaScreen() {
       setLoading(false);
     } catch (err) {
       console.error('Qibla init error:', err);
-      setError('Kıble yönü hesaplanamadı');
+      setError(t.qibla.error);
       setLoading(false);
     }
   };
 
   const startMagnetometer = () => {
+    if (!Magnetometer) return;
+    
     Magnetometer.setUpdateInterval(100);
     
-    const sub = Magnetometer.addListener((data) => {
+    const sub = Magnetometer.addListener((data: { x: number; y: number; z: number }) => {
       let angle = Math.atan2(data.y, data.x) * (180 / Math.PI);
       angle = (angle + 360) % 360;
       
@@ -130,11 +140,11 @@ export default function QiblaScreen() {
     const diff = ((qiblaDirection - heading) + 360) % 360;
     
     if (diff < 10 || diff > 350) {
-      return 'Kıble yönündesiniz!';
+      return t.qibla.pointingToQibla;
     } else if (diff < 180) {
-      return 'Sağa dönün';
+      return t.qibla.turnRight;
     } else {
-      return 'Sola dönün';
+      return t.qibla.turnLeft;
     }
   };
 
@@ -149,7 +159,7 @@ export default function QiblaScreen() {
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#D4AF37" />
-          <Text style={styles.loadingText}>Kıble yönü hesaplanıyor...</Text>
+          <Text style={styles.loadingText}>{t.qibla.loading}</Text>
         </View>
       </SafeAreaView>
     );
@@ -160,8 +170,8 @@ export default function QiblaScreen() {
       <View style={styles.content}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>Kıble Pusulası</Text>
-          <Text style={styles.subtitle}>Mekke, Suudi Arabistan</Text>
+          <Text style={styles.title}>{t.qibla.title}</Text>
+          <Text style={styles.subtitle}>{t.qibla.subtitle}</Text>
         </View>
 
         {error ? (
@@ -169,7 +179,7 @@ export default function QiblaScreen() {
             <Ionicons name="warning" size={48} color="#FF6B6B" />
             <Text style={styles.errorText}>{error}</Text>
             <TouchableOpacity style={styles.retryButton} onPress={initializeQibla}>
-              <Text style={styles.retryText}>Tekrar Dene</Text>
+              <Text style={styles.retryText}>{t.qibla.retry}</Text>
             </TouchableOpacity>
           </View>
         ) : (
@@ -187,16 +197,16 @@ export default function QiblaScreen() {
                 >
                   {/* Cardinal directions */}
                   <View style={[styles.direction, styles.directionN]}>
-                    <Text style={styles.directionText}>K</Text>
+                    <Text style={styles.directionText}>N</Text>
                   </View>
                   <View style={[styles.direction, styles.directionE]}>
-                    <Text style={styles.directionTextSmall}>D</Text>
+                    <Text style={styles.directionTextSmall}>E</Text>
                   </View>
                   <View style={[styles.direction, styles.directionS]}>
-                    <Text style={styles.directionTextSmall}>G</Text>
+                    <Text style={styles.directionTextSmall}>S</Text>
                   </View>
                   <View style={[styles.direction, styles.directionW]}>
-                    <Text style={styles.directionTextSmall}>B</Text>
+                    <Text style={styles.directionTextSmall}>W</Text>
                   </View>
 
                   {/* Degree markers */}
@@ -264,12 +274,12 @@ export default function QiblaScreen() {
             <View style={styles.infoContainer}>
               <View style={styles.infoCard}>
                 <Ionicons name="compass-outline" size={24} color="#D4AF37" />
-                <Text style={styles.infoLabel}>Kıble Açısı</Text>
+                <Text style={styles.infoLabel}>{t.qibla.direction}</Text>
                 <Text style={styles.infoValue}>{qiblaDirection?.toFixed(1)}°</Text>
               </View>
               <View style={styles.infoCard}>
                 <Ionicons name="navigate-outline" size={24} color="#D4AF37" />
-                <Text style={styles.infoLabel}>Pusula</Text>
+                <Text style={styles.infoLabel}>{t.qibla.compass}</Text>
                 <Text style={styles.infoValue}>{heading.toFixed(0)}°</Text>
               </View>
             </View>
@@ -279,7 +289,7 @@ export default function QiblaScreen() {
               <View style={styles.calibrationHint}>
                 <Ionicons name="sync" size={20} color="#8E8E93" />
                 <Text style={styles.calibrationText}>
-                  Pusulayı kalibre etmek için telefonunuzu 8 şeklinde hareket ettirin
+                  {t.qibla.calibrationHint}
                 </Text>
               </View>
             )}
