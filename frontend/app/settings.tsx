@@ -15,6 +15,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
+import { useLanguage } from '../src/i18n/LanguageContext';
+import { translations, Language } from '../src/i18n/translations';
+import { notificationService, NotificationConfig } from '../src/services/NotificationService';
 
 // Dynamic import for expo-location (not available on web)
 let Location: any = null;
@@ -37,13 +40,13 @@ interface CalculationMethod {
   name_tr: string;
 }
 
-interface Language {
-  code: string;
+interface LanguageOption {
+  code: Language;
   name: string;
   nameLocal: string;
 }
 
-const LANGUAGES: Language[] = [
+const LANGUAGES: LanguageOption[] = [
   { code: 'tr', name: 'Turkish', nameLocal: 'Türkçe' },
   { code: 'en', name: 'English', nameLocal: 'English' },
   { code: 'ar', name: 'Arabic', nameLocal: 'العربية' },
@@ -51,15 +54,22 @@ const LANGUAGES: Language[] = [
   { code: 'fr', name: 'French', nameLocal: 'Français' },
 ];
 
+const NOTIFICATION_SOUNDS = [
+  { id: 'default', labelKey: 'soundDefault' },
+  { id: 'azan', labelKey: 'soundAzan' },
+  { id: 'silent', labelKey: 'soundCustom' },
+];
+
 export default function SettingsScreen() {
-  const [language, setLanguage] = useState('tr');
-  const [theme, setTheme] = useState('dark');
+  const { language, setLanguage, t } = useLanguage();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [notificationSound, setNotificationSound] = useState<'default' | 'azan' | 'silent'>('default');
   const [selectedCity, setSelectedCity] = useState<City | null>(null);
   const [calculationMethod, setCalculationMethod] = useState<CalculationMethod | null>(null);
   const [showLanguageModal, setShowLanguageModal] = useState(false);
   const [showCityModal, setShowCityModal] = useState(false);
   const [showMethodModal, setShowMethodModal] = useState(false);
+  const [showSoundModal, setShowSoundModal] = useState(false);
   const [turkishCities, setTurkishCities] = useState<City[]>([]);
   const [worldCities, setWorldCities] = useState<City[]>([]);
   const [calculationMethods, setCalculationMethods] = useState<CalculationMethod[]>([]);
@@ -70,19 +80,20 @@ export default function SettingsScreen() {
     loadSettings();
     fetchCities();
     fetchMethods();
+    loadNotificationConfig();
   }, []);
+
+  const loadNotificationConfig = async () => {
+    const config = notificationService.getConfig();
+    setNotificationsEnabled(config.enabled);
+    setNotificationSound(config.sound);
+  };
 
   const loadSettings = async () => {
     try {
-      const savedLanguage = await AsyncStorage.getItem('language');
-      const savedTheme = await AsyncStorage.getItem('theme');
-      const savedNotifications = await AsyncStorage.getItem('notifications');
       const savedCity = await AsyncStorage.getItem('selectedCity');
       const savedMethod = await AsyncStorage.getItem('calculationMethod');
 
-      if (savedLanguage) setLanguage(savedLanguage);
-      if (savedTheme) setTheme(savedTheme);
-      if (savedNotifications !== null) setNotificationsEnabled(savedNotifications === 'true');
       if (savedCity) setSelectedCity(JSON.parse(savedCity));
       if (savedMethod) setCalculationMethod(JSON.parse(savedMethod));
     } catch (err) {
@@ -125,9 +136,8 @@ export default function SettingsScreen() {
     }
   };
 
-  const saveLanguage = async (lang: string) => {
-    setLanguage(lang);
-    await AsyncStorage.setItem('language', lang);
+  const saveLanguageChoice = async (lang: Language) => {
+    await setLanguage(lang);
     setShowLanguageModal(false);
   };
 
@@ -145,10 +155,23 @@ export default function SettingsScreen() {
 
   const toggleNotifications = async (value: boolean) => {
     setNotificationsEnabled(value);
-    await AsyncStorage.setItem('notifications', value.toString());
+    await notificationService.saveConfig({ enabled: value });
+    if (!value) {
+      await notificationService.cancelAllNotifications();
+    }
+  };
+
+  const saveNotificationSound = async (sound: 'default' | 'azan' | 'silent') => {
+    setNotificationSound(sound);
+    await notificationService.saveConfig({ sound });
+    setShowSoundModal(false);
   };
 
   const useCurrentLocation = async () => {
+    if (Platform.OS === 'web' || !Location) {
+      return;
+    }
+
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
@@ -165,7 +188,7 @@ export default function SettingsScreen() {
       });
 
       const currentCity: City = {
-        name: address?.city || address?.subregion || 'Mevcut Konum',
+        name: address?.city || address?.subregion || 'Current Location',
         latitude: loc.coords.latitude,
         longitude: loc.coords.longitude,
       };
@@ -178,6 +201,11 @@ export default function SettingsScreen() {
 
   const getLanguageName = () => {
     return LANGUAGES.find(l => l.code === language)?.nameLocal || 'Türkçe';
+  };
+
+  const getSoundName = () => {
+    const sound = NOTIFICATION_SOUNDS.find(s => s.id === notificationSound);
+    return sound ? t.notifications[sound.labelKey as keyof typeof t.notifications] : t.notifications.soundDefault;
   };
 
   if (loading) {
@@ -195,19 +223,19 @@ export default function SettingsScreen() {
       <ScrollView style={styles.scrollView}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>Ayarlar</Text>
+          <Text style={styles.title}>{t.settings.title}</Text>
         </View>
 
         {/* Location Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>KONUM</Text>
+          <Text style={styles.sectionTitle}>{t.settings.location}</Text>
           
           <TouchableOpacity style={styles.settingItem} onPress={useCurrentLocation}>
             <View style={styles.settingLeft}>
               <View style={[styles.iconContainer, { backgroundColor: '#4CAF50' }]}>
                 <Ionicons name="locate" size={20} color="#FFFFFF" />
               </View>
-              <Text style={styles.settingText}>Mevcut Konumu Kullan</Text>
+              <Text style={styles.settingText}>{t.settings.useCurrentLocation}</Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color="#8E8E93" />
           </TouchableOpacity>
@@ -218,7 +246,7 @@ export default function SettingsScreen() {
                 <Ionicons name="business" size={20} color="#FFFFFF" />
               </View>
               <View>
-                <Text style={styles.settingText}>Şehir Seç</Text>
+                <Text style={styles.settingText}>{t.settings.selectCity}</Text>
                 {selectedCity && (
                   <Text style={styles.settingSubtext}>{selectedCity.name}</Text>
                 )}
@@ -230,7 +258,7 @@ export default function SettingsScreen() {
 
         {/* Prayer Settings Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>NAMAZ AYARLARI</Text>
+          <Text style={styles.sectionTitle}>{t.settings.prayerSettings}</Text>
           
           <TouchableOpacity style={styles.settingItem} onPress={() => setShowMethodModal(true)}>
             <View style={styles.settingLeft}>
@@ -238,7 +266,7 @@ export default function SettingsScreen() {
                 <Ionicons name="calculator" size={20} color="#FFFFFF" />
               </View>
               <View>
-                <Text style={styles.settingText}>Hesaplama Metodu</Text>
+                <Text style={styles.settingText}>{t.settings.calculationMethod}</Text>
                 {calculationMethod && (
                   <Text style={styles.settingSubtext}>{calculationMethod.name_tr}</Text>
                 )}
@@ -250,14 +278,14 @@ export default function SettingsScreen() {
 
         {/* Notifications Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>BİLDİRİMLER</Text>
+          <Text style={styles.sectionTitle}>{t.settings.notifications}</Text>
           
           <View style={styles.settingItem}>
             <View style={styles.settingLeft}>
               <View style={[styles.iconContainer, { backgroundColor: '#FF9800' }]}>
                 <Ionicons name="notifications" size={20} color="#FFFFFF" />
               </View>
-              <Text style={styles.settingText}>Ezan Bildirimleri</Text>
+              <Text style={styles.settingText}>{t.settings.azanNotifications}</Text>
             </View>
             <Switch
               value={notificationsEnabled}
@@ -266,11 +294,26 @@ export default function SettingsScreen() {
               thumbColor="#FFFFFF"
             />
           </View>
+
+          {notificationsEnabled && (
+            <TouchableOpacity style={styles.settingItem} onPress={() => setShowSoundModal(true)}>
+              <View style={styles.settingLeft}>
+                <View style={[styles.iconContainer, { backgroundColor: '#E91E63' }]}>
+                  <Ionicons name="volume-high" size={20} color="#FFFFFF" />
+                </View>
+                <View>
+                  <Text style={styles.settingText}>{t.settings.notificationSound}</Text>
+                  <Text style={styles.settingSubtext}>{getSoundName()}</Text>
+                </View>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#8E8E93" />
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Language Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>DİL</Text>
+          <Text style={styles.sectionTitle}>{t.settings.language}</Text>
           
           <TouchableOpacity style={styles.settingItem} onPress={() => setShowLanguageModal(true)}>
             <View style={styles.settingLeft}>
@@ -278,7 +321,7 @@ export default function SettingsScreen() {
                 <Ionicons name="language" size={20} color="#FFFFFF" />
               </View>
               <View>
-                <Text style={styles.settingText}>Uygulama Dili</Text>
+                <Text style={styles.settingText}>{t.settings.appLanguage}</Text>
                 <Text style={styles.settingSubtext}>{getLanguageName()}</Text>
               </View>
             </View>
@@ -288,7 +331,7 @@ export default function SettingsScreen() {
 
         {/* About Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>HAKKINDA</Text>
+          <Text style={styles.sectionTitle}>{t.settings.about}</Text>
           
           <View style={styles.settingItem}>
             <View style={styles.settingLeft}>
@@ -296,7 +339,7 @@ export default function SettingsScreen() {
                 <Ionicons name="information-circle" size={20} color="#FFFFFF" />
               </View>
               <View>
-                <Text style={styles.settingText}>Versiyon</Text>
+                <Text style={styles.settingText}>{t.settings.version}</Text>
                 <Text style={styles.settingSubtext}>1.0.0</Text>
               </View>
             </View>
@@ -304,8 +347,8 @@ export default function SettingsScreen() {
         </View>
 
         <View style={styles.footer}>
-          <Text style={styles.footerText}>Namaz Vakitleri</Text>
-          <Text style={styles.footerSubtext}>Tüm vakitler yaklaşık değerlerdir</Text>
+          <Text style={styles.footerText}>{t.settings.appName}</Text>
+          <Text style={styles.footerSubtext}>{t.settings.approximateTimes}</Text>
         </View>
       </ScrollView>
 
@@ -319,7 +362,7 @@ export default function SettingsScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Dil Seçin</Text>
+              <Text style={styles.modalTitle}>{t.settings.selectLanguage}</Text>
               <TouchableOpacity onPress={() => setShowLanguageModal(false)}>
                 <Ionicons name="close" size={24} color="#FFFFFF" />
               </TouchableOpacity>
@@ -333,7 +376,7 @@ export default function SettingsScreen() {
                     styles.modalItem,
                     language === item.code && styles.modalItemSelected,
                   ]}
-                  onPress={() => saveLanguage(item.code)}
+                  onPress={() => saveLanguageChoice(item.code)}
                 >
                   <Text style={styles.modalItemText}>{item.nameLocal}</Text>
                   <Text style={styles.modalItemSubtext}>{item.name}</Text>
@@ -357,7 +400,7 @@ export default function SettingsScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Şehir Seçin</Text>
+              <Text style={styles.modalTitle}>{t.settings.selectCityTitle}</Text>
               <TouchableOpacity onPress={() => setShowCityModal(false)}>
                 <Ionicons name="close" size={24} color="#FFFFFF" />
               </TouchableOpacity>
@@ -370,7 +413,7 @@ export default function SettingsScreen() {
                 onPress={() => setCityTab('turkey')}
               >
                 <Text style={[styles.tabText, cityTab === 'turkey' && styles.tabTextActive]}>
-                  Türkiye
+                  {t.settings.turkey}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -378,7 +421,7 @@ export default function SettingsScreen() {
                 onPress={() => setCityTab('world')}
               >
                 <Text style={[styles.tabText, cityTab === 'world' && styles.tabTextActive]}>
-                  Dünya
+                  {t.settings.world}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -420,7 +463,7 @@ export default function SettingsScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Hesaplama Metodu</Text>
+              <Text style={styles.modalTitle}>{t.settings.calculationMethod}</Text>
               <TouchableOpacity onPress={() => setShowMethodModal(false)}>
                 <Ionicons name="close" size={24} color="#FFFFFF" />
               </TouchableOpacity>
@@ -441,6 +484,52 @@ export default function SettingsScreen() {
                     <Text style={styles.modalItemSubtext}>{item.name}</Text>
                   </View>
                   {calculationMethod?.id === item.id && (
+                    <Ionicons name="checkmark" size={20} color="#D4AF37" />
+                  )}
+                </TouchableOpacity>
+              )}
+            />
+          </View>
+        </View>
+      </Modal>
+
+      {/* Sound Modal */}
+      <Modal
+        visible={showSoundModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowSoundModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{t.settings.notificationSound}</Text>
+              <TouchableOpacity onPress={() => setShowSoundModal(false)}>
+                <Ionicons name="close" size={24} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={NOTIFICATION_SOUNDS}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[
+                    styles.modalItem,
+                    notificationSound === item.id && styles.modalItemSelected,
+                  ]}
+                  onPress={() => saveNotificationSound(item.id as 'default' | 'azan' | 'silent')}
+                >
+                  <View style={styles.soundItem}>
+                    <Ionicons 
+                      name={item.id === 'azan' ? 'volume-high' : item.id === 'silent' ? 'volume-mute' : 'notifications'} 
+                      size={24} 
+                      color="#D4AF37" 
+                    />
+                    <Text style={styles.soundItemText}>
+                      {t.notifications[item.labelKey as keyof typeof t.notifications]}
+                    </Text>
+                  </View>
+                  {notificationSound === item.id && (
                     <Ionicons name="checkmark" size={20} color="#D4AF37" />
                   )}
                 </TouchableOpacity>
@@ -578,6 +667,16 @@ const styles = StyleSheet.create({
   },
   methodItem: {
     flex: 1,
+  },
+  soundItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  soundItemText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    marginLeft: 12,
   },
   tabContainer: {
     flexDirection: 'row',
