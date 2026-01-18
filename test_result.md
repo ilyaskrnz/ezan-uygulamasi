@@ -116,6 +116,9 @@ backend:
       - working: true
         agent: "main"
         comment: "Aladhan API entegrasyonu ile namaz vakitleri çalışıyor. Istanbul için test edildi."
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: Prayer Times API fully functional. Returns correct prayer times (fajr, sunrise, dhuhr, asr, maghrib, isha) with proper time format, date, and hijri date for Istanbul coordinates. Aladhan API integration working perfectly."
 
   - task: "Qibla Direction API"
     implemented: true
@@ -128,6 +131,9 @@ backend:
       - working: true
         agent: "main"
         comment: "Kıble yönü hesaplama API'si çalışıyor. 151.62° döndürüldü."
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: Qibla Direction API working correctly. Returns accurate direction (151.62°) for Istanbul coordinates, matches expected Qibla direction calculation."
 
   - task: "Monthly Prayer Times API"
     implemented: true
@@ -140,6 +146,9 @@ backend:
       - working: true
         agent: "main"
         comment: "Aylık namaz vakitleri API'si çalışıyor."
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: Monthly Prayer Times API fully functional. Returns complete monthly data with proper structure including date, gregorian, hijri, and all prayer times for each day."
 
   - task: "Cities API (Turkey & World)"
     implemented: true
@@ -152,6 +161,9 @@ backend:
       - working: true
         agent: "main"
         comment: "30 Türkiye şehri ve 20 dünya şehri listeleniyor."
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: Cities APIs working perfectly. Turkey endpoint returns exactly 30 Turkish cities including İstanbul. World endpoint returns exactly 20 international cities including Mecca. All cities have proper name, latitude, longitude (and country for world cities)."
 
   - task: "Calculation Methods API"
     implemented: true
@@ -164,6 +176,9 @@ backend:
       - working: true
         agent: "main"
         comment: "14 hesaplama metodu (Diyanet dahil) listeleniyor."
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: Calculation Methods API working correctly. Returns exactly 14 calculation methods including Diyanet İşleri Başkanlığı (id=13) with proper id, name, and name_tr fields."
 
 frontend:
   - task: "Home Screen - Prayer Times Display"
