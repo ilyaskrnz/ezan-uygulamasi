@@ -14,7 +14,6 @@ import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLanguage } from '../src/i18n/LanguageContext';
-import { notificationService } from '../src/services/NotificationService';
 
 // Dynamic import for expo-location (not available on web)
 let Location: any = null;
