@@ -15,9 +15,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
-import { useLanguage } from '../src/i18n/LanguageContext';
-import { translations, Language } from '../src/i18n/translations';
-import { notificationService, NotificationConfig } from '../src/services/NotificationService';
 
 // Dynamic import for expo-location (not available on web)
 let Location: any = null;
