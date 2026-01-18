@@ -9,6 +9,7 @@ import {
   TouchableOpacity,
   Dimensions,
   Alert,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,18 +18,16 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Dynamic imports
 let Location: any = null;
-let DeviceMotion: any = null;
 let Magnetometer: any = null;
 
 if (Platform.OS !== 'web') {
   Location = require('expo-location');
   const Sensors = require('expo-sensors');
-  DeviceMotion = Sensors.DeviceMotion;
   Magnetometer = Sensors.Magnetometer;
 }
 
-const { width } = Dimensions.get('window');
-const COMPASS_SIZE = Math.min(width * 0.82, 300);
+const { width, height } = Dimensions.get('window');
+const COMPASS_SIZE = Math.min(width - 40, 320);
 
 // Kaaba coordinates  
 const KAABA_LAT = 21.4225;
@@ -42,8 +41,6 @@ export default function QiblaScreen() {
   const [error, setError] = useState<string | null>(null);
   const [distance, setDistance] = useState<number | null>(null);
   const [calibrationOffset, setCalibrationOffset] = useState(0);
-  const [manualMode, setManualMode] = useState(false);
-  const [manualHeading, setManualHeading] = useState(0);
   
   const compassAnim = useRef(new Animated.Value(0)).current;
   const [subscription, setSubscription] = useState<any>(null);
@@ -59,15 +56,14 @@ export default function QiblaScreen() {
   }, []);
 
   useEffect(() => {
-    const finalHeading = manualMode ? manualHeading : (heading + calibrationOffset);
-    const normalized = ((finalHeading % 360) + 360) % 360;
+    const finalHeading = (heading + calibrationOffset + 360) % 360;
     
     Animated.timing(compassAnim, {
-      toValue: normalized,
+      toValue: finalHeading,
       duration: 150,
       useNativeDriver: true,
     }).start();
-  }, [heading, calibrationOffset, manualMode, manualHeading]);
+  }, [heading, calibrationOffset]);
 
   const loadCalibration = async () => {
     try {
@@ -151,8 +147,7 @@ export default function QiblaScreen() {
       const dist = calculateDistance(coords.lat, coords.lng, KAABA_LAT, KAABA_LNG);
       setDistance(Math.round(dist));
 
-      // Try DeviceMotion first, fallback to Magnetometer
-      startSensors();
+      startMagnetometer();
       
       setLoading(false);
     } catch (err) {
@@ -162,28 +157,21 @@ export default function QiblaScreen() {
     }
   };
 
-  const startSensors = async () => {
-    // Try Magnetometer
-    if (Magnetometer) {
-      try {
-        Magnetometer.setUpdateInterval(100);
-        
-        const sub = Magnetometer.addListener((data: { x: number; y: number; z: number }) => {
-          // Standard formula for most Android devices
-          let angle = Math.atan2(data.y, data.x) * (180 / Math.PI);
-          angle = ((90 - angle) % 360 + 360) % 360;
-          setHeading(angle);
-        });
-        
-        setSubscription(sub);
-      } catch (e) {
-        console.log('Magnetometer error:', e);
-      }
-    }
+  const startMagnetometer = () => {
+    if (!Magnetometer) return;
+
+    Magnetometer.setUpdateInterval(100);
+    
+    const sub = Magnetometer.addListener((data: { x: number; y: number; z: number }) => {
+      let angle = Math.atan2(data.y, data.x) * (180 / Math.PI);
+      angle = ((90 - angle) % 360 + 360) % 360;
+      setHeading(angle);
+    });
+    
+    setSubscription(sub);
   };
 
   const getCurrentHeading = () => {
-    if (manualMode) return manualHeading;
     return ((heading + calibrationOffset) % 360 + 360) % 360;
   };
 
@@ -224,7 +212,6 @@ export default function QiblaScreen() {
   };
 
   const setAsNorth = () => {
-    // Set current heading as 0 (North)
     const newOffset = -heading;
     setCalibrationOffset(newOffset);
     saveCalibration(newOffset);
@@ -240,7 +227,7 @@ export default function QiblaScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#C9A227" />
+          <ActivityIndicator size="large" color="#D4AF37" />
           <Text style={styles.loadingText}>{t.qibla.loading}</Text>
         </View>
       </SafeAreaView>
@@ -262,96 +249,147 @@ export default function QiblaScreen() {
   }
 
   const currentHeading = getCurrentHeading();
-  const qiblaRelative = getQiblaRelativeAngle();
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.content}>
+      <ScrollView 
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.title}>Kıble Pusulası</Text>
-          <View style={styles.headerInfo}>
-            <Text style={styles.qiblaAngle}>Kıble: {qiblaDirection?.toFixed(1)}°</Text>
-            <Text style={styles.distance}>{distance?.toLocaleString()} km</Text>
+        <Text style={styles.title}>Kıble Pusulası</Text>
+        
+        {/* Info Row */}
+        <View style={styles.infoRow}>
+          <View style={styles.infoItem}>
+            <Text style={styles.infoLabel}>Kıble Açısı</Text>
+            <Text style={styles.infoValue}>{qiblaDirection?.toFixed(1)}°</Text>
+          </View>
+          <View style={styles.infoSeparator} />
+          <View style={styles.infoItem}>
+            <Text style={styles.infoLabel}>Mesafe</Text>
+            <Text style={styles.infoValue}>{distance?.toLocaleString()} km</Text>
           </View>
         </View>
 
-        {/* Main Display */}
-        <View style={styles.mainDisplay}>
-          <Text style={styles.currentHeading}>{currentHeading.toFixed(0)}°</Text>
-          <Text style={styles.currentLabel}>Pusula Yönü</Text>
+        {/* Current Heading */}
+        <View style={styles.headingContainer}>
+          <Text style={styles.headingValue}>{currentHeading.toFixed(0)}°</Text>
+          <Text style={styles.headingLabel}>Pusula Yönü</Text>
         </View>
 
         {/* Compass */}
-        <View style={styles.compassContainer}>
-          {/* Fixed North marker */}
-          <View style={styles.northPointer}>
-            <Ionicons name="caret-down" size={24} color="#E74C3C" />
+        <View style={styles.compassWrapper}>
+          {/* North indicator - fixed at top */}
+          <View style={styles.northIndicator}>
+            <View style={styles.northTriangle} />
           </View>
 
-          {/* Rotating dial */}
-          <Animated.View style={[
-            styles.compassDial,
-            { transform: [{ rotate: compassRotation }] }
-          ]}>
-            {/* Degree marks */}
-            {[...Array(36)].map((_, i) => {
-              const deg = i * 10;
-              const isCardinal = deg % 90 === 0;
-              const isMajor = deg % 30 === 0;
-              return (
-                <View
-                  key={i}
-                  style={[
-                    styles.tickContainer,
-                    { transform: [{ rotate: `${deg}deg` }] }
-                  ]}
-                >
-                  <View style={[
-                    styles.tick,
-                    isCardinal && styles.tickCardinal,
-                    isMajor && !isCardinal && styles.tickMajor,
-                  ]} />
-                  {isMajor && (
-                    <Text style={[
-                      styles.tickText,
-                      isCardinal && styles.tickTextCardinal,
-                    ]}>
-                      {deg === 0 ? 'N' : deg === 90 ? 'E' : deg === 180 ? 'S' : deg === 270 ? 'W' : deg}
-                    </Text>
-                  )}
-                </View>
-              );
-            })}
+          {/* Compass dial */}
+          <Animated.View 
+            style={[
+              styles.compassDial,
+              { transform: [{ rotate: compassRotation }] }
+            ]}
+          >
+            {/* Outer ring with degree marks */}
+            <View style={styles.outerRing}>
+              {/* Degree markers */}
+              {[...Array(72)].map((_, i) => {
+                const deg = i * 5;
+                const isCardinal = deg % 90 === 0;
+                const isMajor = deg % 30 === 0;
+                return (
+                  <View
+                    key={i}
+                    style={[
+                      styles.degreeMarker,
+                      { transform: [{ rotate: `${deg}deg` }] }
+                    ]}
+                  >
+                    <View style={[
+                      styles.markerLine,
+                      isCardinal && styles.markerCardinal,
+                      isMajor && !isCardinal && styles.markerMajor,
+                    ]} />
+                  </View>
+                );
+              })}
 
-            {/* Qibla indicator on dial */}
-            <View style={[
-              styles.qiblaMarker,
-              { transform: [{ rotate: `${qiblaDirection}deg` }] }
-            ]}>
-              <View style={[
-                styles.qiblaArrow,
-                isPointingToQibla() && styles.qiblaArrowActive
-              ]}>
-                <Text style={styles.qiblaLabel}>KIBLE</Text>
-                <Ionicons 
-                  name="arrow-up" 
-                  size={28} 
-                  color={isPointingToQibla() ? '#27AE60' : '#C9A227'} 
-                />
+              {/* Cardinal labels */}
+              <View style={[styles.cardinalLabel, styles.cardinalN]}>
+                <Text style={styles.cardinalText}>N</Text>
+              </View>
+              <View style={[styles.cardinalLabel, styles.cardinalE]}>
+                <Text style={styles.cardinalTextSmall}>E</Text>
+              </View>
+              <View style={[styles.cardinalLabel, styles.cardinalS]}>
+                <Text style={styles.cardinalTextSmall}>S</Text>
+              </View>
+              <View style={[styles.cardinalLabel, styles.cardinalW]}>
+                <Text style={styles.cardinalTextSmall}>W</Text>
+              </View>
+
+              {/* Degree numbers */}
+              <View style={[styles.degreeLabel, { transform: [{ rotate: '30deg' }] }]}>
+                <Text style={styles.degreeLabelText}>30</Text>
+              </View>
+              <View style={[styles.degreeLabel, { transform: [{ rotate: '60deg' }] }]}>
+                <Text style={styles.degreeLabelText}>60</Text>
+              </View>
+              <View style={[styles.degreeLabel, { transform: [{ rotate: '120deg' }] }]}>
+                <Text style={styles.degreeLabelText}>120</Text>
+              </View>
+              <View style={[styles.degreeLabel, { transform: [{ rotate: '150deg' }] }]}>
+                <Text style={styles.degreeLabelText}>150</Text>
+              </View>
+              <View style={[styles.degreeLabel, { transform: [{ rotate: '210deg' }] }]}>
+                <Text style={styles.degreeLabelText}>210</Text>
+              </View>
+              <View style={[styles.degreeLabel, { transform: [{ rotate: '240deg' }] }]}>
+                <Text style={styles.degreeLabelText}>240</Text>
+              </View>
+              <View style={[styles.degreeLabel, { transform: [{ rotate: '300deg' }] }]}>
+                <Text style={styles.degreeLabelText}>300</Text>
+              </View>
+              <View style={[styles.degreeLabel, { transform: [{ rotate: '330deg' }] }]}>
+                <Text style={styles.degreeLabelText}>330</Text>
               </View>
             </View>
 
-            {/* Center */}
-            <View style={[
-              styles.centerCircle,
-              isPointingToQibla() && styles.centerCircleActive
-            ]}>
-              <Ionicons 
-                name="cube" 
-                size={28} 
-                color={isPointingToQibla() ? '#27AE60' : '#C9A227'} 
-              />
+            {/* Inner area */}
+            <View style={styles.innerCircle}>
+              {/* Qibla arrow */}
+              <View 
+                style={[
+                  styles.qiblaArrowContainer,
+                  { transform: [{ rotate: `${qiblaDirection || 0}deg` }] }
+                ]}
+              >
+                <View style={styles.qiblaArrow}>
+                  <Text style={[
+                    styles.qiblaText,
+                    isPointingToQibla() && styles.qiblaTextActive
+                  ]}>KIBLE</Text>
+                  <Ionicons 
+                    name="arrow-up" 
+                    size={32} 
+                    color={isPointingToQibla() ? '#27AE60' : '#D4AF37'} 
+                  />
+                </View>
+              </View>
+
+              {/* Center Kaaba icon */}
+              <View style={[
+                styles.centerKaaba,
+                isPointingToQibla() && styles.centerKaabaActive
+              ]}>
+                <Ionicons 
+                  name="cube" 
+                  size={26} 
+                  color={isPointingToQibla() ? '#27AE60' : '#D4AF37'} 
+                />
+              </View>
             </View>
           </Animated.View>
         </View>
@@ -369,58 +407,43 @@ export default function QiblaScreen() {
           </Text>
         </View>
 
-        {/* Calibration Controls */}
-        <View style={styles.calibrationSection}>
+        {/* Calibration Section */}
+        <View style={styles.calibrationCard}>
           <Text style={styles.calibrationTitle}>Pusula Kalibrasyonu</Text>
           <Text style={styles.calibrationHint}>
-            Pusula yanlış gösteriyorsa aşağıdaki butonlarla ayarlayın
+            Pusula yanlış gösteriyorsa butonlarla ayarlayın
           </Text>
           
-          <View style={styles.calibrationControls}>
-            <TouchableOpacity 
-              style={styles.calBtn} 
-              onPress={() => adjustCalibration(-10)}
-            >
+          <View style={styles.calibrationButtons}>
+            <TouchableOpacity style={styles.calBtn} onPress={() => adjustCalibration(-10)}>
               <Text style={styles.calBtnText}>-10°</Text>
             </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.calBtn} 
-              onPress={() => adjustCalibration(-1)}
-            >
+            <TouchableOpacity style={styles.calBtn} onPress={() => adjustCalibration(-1)}>
               <Text style={styles.calBtnText}>-1°</Text>
             </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.calBtnReset} 
-              onPress={resetCalibration}
-            >
+            <TouchableOpacity style={styles.calBtnReset} onPress={resetCalibration}>
               <Text style={styles.calBtnResetText}>Sıfırla</Text>
             </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.calBtn} 
-              onPress={() => adjustCalibration(1)}
-            >
+            <TouchableOpacity style={styles.calBtn} onPress={() => adjustCalibration(1)}>
               <Text style={styles.calBtnText}>+1°</Text>
             </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.calBtn} 
-              onPress={() => adjustCalibration(10)}
-            >
+            <TouchableOpacity style={styles.calBtn} onPress={() => adjustCalibration(10)}>
               <Text style={styles.calBtnText}>+10°</Text>
             </TouchableOpacity>
           </View>
 
           <TouchableOpacity style={styles.northBtn} onPress={setAsNorth}>
-            <Ionicons name="navigate" size={18} color="#0A0A14" />
-            <Text style={styles.northBtnText}>Şu anı Kuzey (0°) olarak ayarla</Text>
+            <Ionicons name="navigate" size={16} color="#0F0F1A" />
+            <Text style={styles.northBtnText}>Şu anı Kuzey olarak ayarla</Text>
           </TouchableOpacity>
 
           {calibrationOffset !== 0 && (
-            <Text style={styles.offsetText}>
+            <Text style={styles.offsetInfo}>
               Kalibrasyon: {calibrationOffset > 0 ? '+' : ''}{calibrationOffset.toFixed(0)}°
             </Text>
           )}
         </View>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -428,12 +451,12 @@ export default function QiblaScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0A0A14',
+    backgroundColor: '#0F0F1A',
   },
-  content: {
-    flex: 1,
+  scrollContent: {
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
+    paddingBottom: 30,
   },
   loadingContainer: {
     flex: 1,
@@ -459,146 +482,218 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   retryButton: {
-    backgroundColor: '#C9A227',
+    backgroundColor: '#D4AF37',
     paddingHorizontal: 28,
     paddingVertical: 12,
     borderRadius: 25,
   },
   retryText: {
-    color: '#0A0A14',
+    color: '#0F0F1A',
     fontSize: 16,
     fontWeight: '600',
   },
-  header: {
-    alignItems: 'center',
-    marginTop: 8,
-    marginBottom: 8,
-  },
   title: {
     color: '#FFFFFF',
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '700',
+    marginTop: 10,
+    marginBottom: 12,
   },
-  headerInfo: {
+  infoRow: {
     flexDirection: 'row',
-    gap: 20,
-    marginTop: 4,
+    backgroundColor: '#1A1A2E',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    marginBottom: 16,
   },
-  qiblaAngle: {
-    color: '#C9A227',
-    fontSize: 13,
-  },
-  distance: {
-    color: '#8E8E93',
-    fontSize: 13,
-  },
-  mainDisplay: {
+  infoItem: {
     alignItems: 'center',
-    marginBottom: 10,
+    flex: 1,
   },
-  currentHeading: {
+  infoSeparator: {
+    width: 1,
+    backgroundColor: '#2D2D44',
+    marginHorizontal: 16,
+  },
+  infoLabel: {
+    color: '#8E8E93',
+    fontSize: 11,
+  },
+  infoValue: {
+    color: '#D4AF37',
+    fontSize: 18,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  headingContainer: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  headingValue: {
     color: '#FFFFFF',
-    fontSize: 48,
+    fontSize: 52,
     fontWeight: '200',
   },
-  currentLabel: {
+  headingLabel: {
     color: '#8E8E93',
     fontSize: 12,
   },
-  compassContainer: {
-    width: COMPASS_SIZE,
-    height: COMPASS_SIZE,
+  compassWrapper: {
+    width: COMPASS_SIZE + 20,
+    height: COMPASS_SIZE + 20,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 16,
   },
-  northPointer: {
+  northIndicator: {
     position: 'absolute',
-    top: -12,
+    top: 0,
     zIndex: 10,
+  },
+  northTriangle: {
+    width: 0,
+    height: 0,
+    borderLeftWidth: 12,
+    borderRightWidth: 12,
+    borderBottomWidth: 18,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderBottomColor: '#E74C3C',
   },
   compassDial: {
     width: COMPASS_SIZE,
     height: COMPASS_SIZE,
     borderRadius: COMPASS_SIZE / 2,
-    backgroundColor: '#12121E',
+    backgroundColor: '#1A1A2E',
+    alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 2,
-    borderColor: '#1E1E2E',
+    borderColor: '#2D2D44',
+  },
+  outerRing: {
+    position: 'absolute',
+    width: COMPASS_SIZE,
+    height: COMPASS_SIZE,
+    borderRadius: COMPASS_SIZE / 2,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  tickContainer: {
+  degreeMarker: {
     position: 'absolute',
-    top: 0,
+    width: 2,
     height: COMPASS_SIZE / 2,
     alignItems: 'center',
   },
-  tick: {
+  markerLine: {
     width: 1,
     height: 8,
     backgroundColor: '#3D3D5C',
-    marginTop: 8,
+    marginTop: 4,
   },
-  tickMajor: {
+  markerMajor: {
     width: 2,
-    height: 14,
+    height: 12,
     backgroundColor: '#5D5D7C',
   },
-  tickCardinal: {
+  markerCardinal: {
     width: 3,
-    height: 18,
-    backgroundColor: '#C9A227',
+    height: 16,
+    backgroundColor: '#D4AF37',
   },
-  tickText: {
-    color: '#8E8E93',
-    fontSize: 10,
-    marginTop: 2,
-  },
-  tickTextCardinal: {
-    color: '#C9A227',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  qiblaMarker: {
+  cardinalLabel: {
     position: 'absolute',
-    top: 0,
-    height: COMPASS_SIZE / 2,
-    alignItems: 'center',
-  },
-  qiblaArrow: {
-    alignItems: 'center',
-    marginTop: 35,
-  },
-  qiblaArrowActive: {
-    transform: [{ scale: 1.15 }],
-  },
-  qiblaLabel: {
-    color: '#C9A227',
-    fontSize: 8,
-    fontWeight: '700',
-    letterSpacing: 1,
-  },
-  centerCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#0A0A14',
-    borderWidth: 2,
-    borderColor: '#C9A227',
+    width: 24,
+    height: 24,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  centerCircleActive: {
+  cardinalN: {
+    top: 22,
+  },
+  cardinalE: {
+    right: 22,
+  },
+  cardinalS: {
+    bottom: 22,
+  },
+  cardinalW: {
+    left: 22,
+  },
+  cardinalText: {
+    color: '#D4AF37',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  cardinalTextSmall: {
+    color: '#8E8E93',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  degreeLabel: {
+    position: 'absolute',
+    width: COMPASS_SIZE,
+    height: COMPASS_SIZE,
+    alignItems: 'center',
+  },
+  degreeLabelText: {
+    color: '#5D5D7C',
+    fontSize: 10,
+    marginTop: 42,
+  },
+  innerCircle: {
+    width: COMPASS_SIZE - 90,
+    height: COMPASS_SIZE - 90,
+    borderRadius: (COMPASS_SIZE - 90) / 2,
+    backgroundColor: '#0F0F1A',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#2D2D44',
+  },
+  qiblaArrowContainer: {
+    position: 'absolute',
+    width: COMPASS_SIZE - 90,
+    height: COMPASS_SIZE - 90,
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    paddingTop: 12,
+  },
+  qiblaArrow: {
+    alignItems: 'center',
+  },
+  qiblaText: {
+    color: '#D4AF37',
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 1,
+    marginBottom: -4,
+  },
+  qiblaTextActive: {
+    color: '#27AE60',
+  },
+  centerKaaba: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#1A1A2E',
+    borderWidth: 2,
+    borderColor: '#D4AF37',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  centerKaabaActive: {
     borderColor: '#27AE60',
     backgroundColor: '#0D1A12',
   },
   statusBox: {
-    backgroundColor: '#12121E',
+    backgroundColor: '#1A1A2E',
     paddingHorizontal: 24,
-    paddingVertical: 12,
+    paddingVertical: 14,
     borderRadius: 25,
-    marginTop: 16,
+    marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#1E1E2E',
+    borderColor: '#2D2D44',
   },
   statusBoxActive: {
     backgroundColor: '#0D1A12',
@@ -606,20 +701,19 @@ const styles = StyleSheet.create({
   },
   statusText: {
     color: '#FFFFFF',
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '600',
   },
   statusTextActive: {
     color: '#27AE60',
   },
-  calibrationSection: {
+  calibrationCard: {
     width: '100%',
-    backgroundColor: '#12121E',
+    backgroundColor: '#1A1A2E',
     borderRadius: 16,
     padding: 16,
-    marginTop: 16,
     borderWidth: 1,
-    borderColor: '#1E1E2E',
+    borderColor: '#2D2D44',
   },
   calibrationTitle: {
     color: '#FFFFFF',
@@ -632,17 +726,17 @@ const styles = StyleSheet.create({
     color: '#8E8E93',
     fontSize: 11,
     textAlign: 'center',
-    marginBottom: 12,
+    marginBottom: 14,
   },
-  calibrationControls: {
+  calibrationButtons: {
     flexDirection: 'row',
     justifyContent: 'center',
     gap: 8,
-    marginBottom: 12,
+    marginBottom: 14,
   },
   calBtn: {
-    backgroundColor: '#1E1E2E',
-    paddingHorizontal: 14,
+    backgroundColor: '#2D2D44',
+    paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
   },
@@ -652,13 +746,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   calBtnReset: {
-    backgroundColor: '#2D2D44',
-    paddingHorizontal: 14,
+    backgroundColor: '#3D3D5C',
+    paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
   },
   calBtnResetText: {
-    color: '#8E8E93',
+    color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '600',
   },
@@ -667,20 +761,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#C9A227',
+    backgroundColor: '#D4AF37',
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 20,
   },
   northBtnText: {
-    color: '#0A0A14',
+    color: '#0F0F1A',
     fontSize: 13,
     fontWeight: '600',
   },
-  offsetText: {
-    color: '#C9A227',
+  offsetInfo: {
+    color: '#D4AF37',
     fontSize: 12,
     textAlign: 'center',
-    marginTop: 10,
+    marginTop: 12,
   },
 });
