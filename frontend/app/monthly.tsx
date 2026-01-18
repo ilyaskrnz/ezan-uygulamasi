@@ -6,11 +6,17 @@ import {
   ScrollView,
   ActivityIndicator,
   TouchableOpacity,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import * as Location from 'expo-location';
 import axios from 'axios';
+
+// Dynamic import for expo-location (not available on web)
+let Location: any = null;
+if (Platform.OS !== 'web') {
+  Location = require('expo-location');
+}
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 
