@@ -2,18 +2,26 @@ import React from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet } from 'react-native';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { StyleSheet, Platform } from 'react-native';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LanguageProvider, useLanguage } from '../src/i18n/LanguageContext';
 
 function TabsNavigator() {
   const { t } = useLanguage();
+  const insets = useSafeAreaInsets();
 
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarStyle: styles.tabBar,
+        tabBarStyle: {
+          backgroundColor: '#1A1A2E',
+          borderTopColor: '#2D2D44',
+          borderTopWidth: 1,
+          height: 60 + insets.bottom,
+          paddingBottom: insets.bottom + 8,
+          paddingTop: 8,
+        },
         tabBarActiveTintColor: '#D4AF37',
         tabBarInactiveTintColor: '#8E8E93',
         tabBarLabelStyle: styles.tabBarLabel,
