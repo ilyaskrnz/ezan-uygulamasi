@@ -13,6 +13,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useLanguage } from '../src/i18n/LanguageContext';
+import { notificationService } from '../src/services/NotificationService';
 
 // Dynamic import for expo-location (not available on web)
 let Location: any = null;
@@ -27,6 +29,7 @@ interface PrayerTime {
   nameTr: string;
   time: string;
   icon: keyof typeof Ionicons.glyphMap;
+  key: string;
 }
 
 interface PrayerData {
@@ -43,12 +46,13 @@ interface PrayerData {
 }
 
 export default function HomeScreen() {
+  const { t } = useLanguage();
   const [prayerData, setPrayerData] = useState<PrayerData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
-  const [cityName, setCityName] = useState<string>('Konum alınıyor...');
+  const [cityName, setCityName] = useState<string>(t.home.locationLoading);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [nextPrayer, setNextPrayer] = useState<{ name: string; time: string; remaining: string } | null>(null);
 
@@ -65,18 +69,30 @@ export default function HomeScreen() {
     if (prayerData) {
       calculateNextPrayer();
     }
-  }, [prayerData, currentTime]);
+  }, [prayerData, currentTime, t]);
+
+  // Initialize notifications
+  useEffect(() => {
+    notificationService.initialize();
+  }, []);
+
+  // Schedule notifications when prayer data changes
+  useEffect(() => {
+    if (prayerData) {
+      notificationService.schedulePrayerNotifications(prayerData, t.notifications);
+    }
+  }, [prayerData, t]);
 
   const calculateNextPrayer = () => {
     if (!prayerData) return;
 
     const prayers = [
-      { name: 'İmsak', time: prayerData.fajr },
-      { name: 'Güneş', time: prayerData.sunrise },
-      { name: 'Öğle', time: prayerData.dhuhr },
-      { name: 'İkindi', time: prayerData.asr },
-      { name: 'Akşam', time: prayerData.maghrib },
-      { name: 'Yatsı', time: prayerData.isha },
+      { name: t.prayers.fajr, time: prayerData.fajr },
+      { name: t.prayers.sunrise, time: prayerData.sunrise },
+      { name: t.prayers.dhuhr, time: prayerData.dhuhr },
+      { name: t.prayers.asr, time: prayerData.asr },
+      { name: t.prayers.maghrib, time: prayerData.maghrib },
+      { name: t.prayers.isha, time: prayerData.isha },
     ];
 
     const now = currentTime;
@@ -104,18 +120,33 @@ export default function HomeScreen() {
 
     // If all prayers passed, next is tomorrow's Fajr
     setNextPrayer({
-      name: 'İmsak',
+      name: t.prayers.fajr,
       time: prayerData.fajr,
-      remaining: 'Yarın',
+      remaining: t.home.tomorrow,
     });
   };
 
   const getLocation = async () => {
     try {
+      // Check for saved city first
+      const savedCity = await AsyncStorage.getItem('selectedCity');
+      if (savedCity) {
+        const city = JSON.parse(savedCity);
+        setLocation({ lat: city.latitude, lng: city.longitude });
+        setCityName(city.name);
+        return { lat: city.latitude, lng: city.longitude };
+      }
+
+      if (Platform.OS === 'web' || !Location) {
+        // Default to Istanbul on web
+        setLocation({ lat: 41.0082, lng: 28.9784 });
+        setCityName('İstanbul');
+        return { lat: 41.0082, lng: 28.9784 };
+      }
+
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        setError('Konum izni verilmedi');
-        // Use default location (Istanbul)
+        setError(t.home.locationDenied);
         setLocation({ lat: 41.0082, lng: 28.9784 });
         setCityName('İstanbul');
         return { lat: 41.0082, lng: 28.9784 };
@@ -135,17 +166,16 @@ export default function HomeScreen() {
           longitude: coords.lng,
         });
         if (address) {
-          setCityName(address.city || address.subregion || address.region || 'Bilinmeyen Konum');
+          setCityName(address.city || address.subregion || address.region || 'Unknown');
         }
       } catch {
-        setCityName('Konum');
+        setCityName('Location');
       }
 
       return coords;
     } catch (err) {
       console.error('Location error:', err);
-      setError('Konum alınamadı');
-      // Use default location
+      setError(t.home.locationError);
       setLocation({ lat: 41.0082, lng: 28.9784 });
       setCityName('İstanbul');
       return { lat: 41.0082, lng: 28.9784 };
@@ -168,7 +198,7 @@ export default function HomeScreen() {
       }
     } catch (err) {
       console.error('Prayer times error:', err);
-      setError('Namaz vakitleri alınamadı');
+      setError(t.home.error);
     }
   };
 
@@ -193,12 +223,12 @@ export default function HomeScreen() {
 
   const prayerTimes: PrayerTime[] = prayerData
     ? [
-        { name: 'Fajr', nameTr: 'İmsak', time: prayerData.fajr, icon: 'moon-outline' },
-        { name: 'Sunrise', nameTr: 'Güneş', time: prayerData.sunrise, icon: 'sunny-outline' },
-        { name: 'Dhuhr', nameTr: 'Öğle', time: prayerData.dhuhr, icon: 'sunny' },
-        { name: 'Asr', nameTr: 'İkindi', time: prayerData.asr, icon: 'partly-sunny-outline' },
-        { name: 'Maghrib', nameTr: 'Akşam', time: prayerData.maghrib, icon: 'cloudy-night-outline' },
-        { name: 'Isha', nameTr: 'Yatsı', time: prayerData.isha, icon: 'moon' },
+        { name: 'Fajr', nameTr: t.prayers.fajr, time: prayerData.fajr, icon: 'moon-outline', key: 'fajr' },
+        { name: 'Sunrise', nameTr: t.prayers.sunrise, time: prayerData.sunrise, icon: 'sunny-outline', key: 'sunrise' },
+        { name: 'Dhuhr', nameTr: t.prayers.dhuhr, time: prayerData.dhuhr, icon: 'sunny', key: 'dhuhr' },
+        { name: 'Asr', nameTr: t.prayers.asr, time: prayerData.asr, icon: 'partly-sunny-outline', key: 'asr' },
+        { name: 'Maghrib', nameTr: t.prayers.maghrib, time: prayerData.maghrib, icon: 'cloudy-night-outline', key: 'maghrib' },
+        { name: 'Isha', nameTr: t.prayers.isha, time: prayerData.isha, icon: 'moon', key: 'isha' },
       ]
     : [];
 
@@ -211,7 +241,7 @@ export default function HomeScreen() {
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#D4AF37" />
-          <Text style={styles.loadingText}>Namaz vakitleri yükleniyor...</Text>
+          <Text style={styles.loadingText}>{t.home.loading}</Text>
         </View>
       </SafeAreaView>
     );
@@ -250,20 +280,20 @@ export default function HomeScreen() {
           <View style={styles.nextPrayerCard}>
             <View style={styles.nextPrayerHeader}>
               <Ionicons name="notifications" size={24} color="#D4AF37" />
-              <Text style={styles.nextPrayerLabel}>Sonraki Vakit</Text>
+              <Text style={styles.nextPrayerLabel}>{t.home.nextPrayer}</Text>
             </View>
             <Text style={styles.nextPrayerName}>{nextPrayer.name}</Text>
             <Text style={styles.nextPrayerTime}>{nextPrayer.time}</Text>
             <View style={styles.countdownContainer}>
               <Ionicons name="time-outline" size={18} color="#8E8E93" />
-              <Text style={styles.countdownText}>{nextPrayer.remaining} kaldı</Text>
+              <Text style={styles.countdownText}>{nextPrayer.remaining} {t.home.remaining}</Text>
             </View>
           </View>
         )}
 
         {/* Current Time */}
         <View style={styles.currentTimeContainer}>
-          <Text style={styles.currentTimeLabel}>Şu an</Text>
+          <Text style={styles.currentTimeLabel}>{t.home.currentTime}</Text>
           <Text style={styles.currentTime}>
             {currentTime.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
           </Text>
@@ -271,7 +301,7 @@ export default function HomeScreen() {
 
         {/* Prayer Times List */}
         <View style={styles.prayerListContainer}>
-          <Text style={styles.sectionTitle}>Günlük Vakitler</Text>
+          <Text style={styles.sectionTitle}>{t.home.dailyTimes}</Text>
           {prayerTimes.map((prayer, index) => (
             <View
               key={index}
