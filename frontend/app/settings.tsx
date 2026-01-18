@@ -79,14 +79,7 @@ export default function SettingsScreen() {
     loadSettings();
     fetchCities();
     fetchMethods();
-    loadNotificationConfig();
   }, []);
-
-  const loadNotificationConfig = async () => {
-    const config = notificationService.getConfig();
-    setNotificationsEnabled(config.enabled);
-    setNotificationSound(config.sound);
-  };
 
   const loadSettings = async () => {
     try {
