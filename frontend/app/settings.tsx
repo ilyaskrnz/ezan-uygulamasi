@@ -147,15 +147,12 @@ export default function SettingsScreen() {
 
   const toggleNotifications = async (value: boolean) => {
     setNotificationsEnabled(value);
-    await notificationService.saveConfig({ enabled: value });
-    if (!value) {
-      await notificationService.cancelAllNotifications();
-    }
+    await AsyncStorage.setItem('notifications', value.toString());
   };
 
   const saveNotificationSound = async (sound: 'default' | 'azan' | 'silent') => {
     setNotificationSound(sound);
-    await notificationService.saveConfig({ sound });
+    await AsyncStorage.setItem('notificationSound', sound);
     setShowSoundModal(false);
   };
 
