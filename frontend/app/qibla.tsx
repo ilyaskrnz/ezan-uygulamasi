@@ -187,13 +187,17 @@ export default function QiblaScreen() {
     Magnetometer.setUpdateInterval(50);
     
     const sub = Magnetometer.addListener((data: { x: number; y: number; z: number }) => {
-      let angle = Math.atan2(data.y, data.x) * (180 / Math.PI);
+      let angle: number;
       
-      // Normalize angle
       if (Platform.OS === 'android') {
+        // Android: x points East, y points North
+        // We need to calculate the angle from North
+        angle = Math.atan2(data.x, data.y) * (180 / Math.PI);
         angle = (angle + 360) % 360;
       } else {
-        angle = (360 - angle + 360) % 360;
+        // iOS: different coordinate system
+        angle = Math.atan2(data.y, data.x) * (180 / Math.PI);
+        angle = (360 - angle + 90) % 360;
       }
       
       setHeading(angle);
