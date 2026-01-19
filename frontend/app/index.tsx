@@ -16,6 +16,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLanguage } from '../src/i18n/LanguageContext';
+import { BannerAdComponent } from '../src/components/AdMob';
 
 let Location: any = null;
 if (Platform.OS !== 'web') {
