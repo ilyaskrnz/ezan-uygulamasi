@@ -309,8 +309,8 @@ export default function HomeScreen() {
               {/* Sonraki namaz */}
               {nextPrayer && (
                 <View style={styles.nextPrayerSection}>
-                  <View style={styles.nextPrayerHeader}>
-                    <Ionicons name="notifications" size={18} color="#00BFA6" />
+                  <View style={styles.nextPrayerBadge}>
+                    <Ionicons name="notifications" size={20} color="#121212" />
                     <Text style={styles.nextPrayerLabel}>{t.home.nextPrayer}</Text>
                   </View>
                   
