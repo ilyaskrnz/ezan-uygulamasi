@@ -234,7 +234,7 @@ export default function QiblaScreen() {
         <View style={styles.centerContent}>
           <Ionicons name="alert-circle" size={60} color="#E74C3C" />
           <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity style={styles.retryBtn} onPress={initializeQibla}>
+          <TouchableOpacity style={styles.retryBtn} onPress={initCompass}>
             <Text style={styles.retryBtnText}>{t.qibla.retry}</Text>
           </TouchableOpacity>
         </View>
@@ -242,112 +242,105 @@ export default function QiblaScreen() {
     );
   }
 
+  const qiblaAngleDisplay = ((qiblad % 360) + 360) % 360;
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Header */}
         <Text style={styles.title}>Kıble Pusulası</Text>
-        <View style={styles.subHeader}>
-          <Text style={styles.qiblaInfo}>Kıble: {qiblaDirection?.toFixed(1)}°</Text>
-          <Text style={styles.distanceInfo}>{distance?.toLocaleString()} km</Text>
+        
+        {/* Yön ve Derece */}
+        <View style={styles.directionBox}>
+          <Text style={styles.directionName}>{getDirectionName(compassDegree)}</Text>
+          <Text style={[
+            styles.headingBig, 
+            isPointingToQibla() && styles.headingActive
+          ]}>
+            {compassDegree}°
+          </Text>
         </View>
 
-        {/* Heading Display */}
-        <Text style={styles.headingBig}>{getCurrentHeading().toFixed(0)}°</Text>
-        <Text style={styles.headingLabel}>Pusula Yönü</Text>
-
-        {/* Compass */}
+        {/* Pusula */}
         <View style={styles.compassContainer}>
+          {/* Üst Kırmızı İşaretçi */}
           <View style={styles.northPointer}>
-            <Ionicons name="caret-down" size={28} color="#E74C3C" />
+            <View style={styles.pointerTriangle} />
           </View>
 
+          {/* Dönen Pusula */}
           <Animated.View style={[styles.compassDial, { transform: [{ rotate: compassRotation }] }]}>
-            {/* Tick marks */}
-            {[...Array(72)].map((_, i) => {
-              const deg = i * 5;
-              const isCardinal = deg % 90 === 0;
-              const isMajor = deg % 30 === 0;
-              return (
-                <View key={i} style={[styles.tickWrapper, { transform: [{ rotate: `${deg}deg` }] }]}>
-                  <View style={[
-                    styles.tick,
-                    isCardinal && styles.tickCardinal,
-                    isMajor && !isCardinal && styles.tickMajor,
-                  ]} />
-                </View>
-              );
-            })}
-
-            {/* Cardinal & Degree Labels */}
-            <Text style={[styles.cardinalLabel, styles.labelN]}>N</Text>
-            <Text style={[styles.cardinalLabel, styles.labelE]}>E</Text>
-            <Text style={[styles.cardinalLabel, styles.labelS]}>S</Text>
-            <Text style={[styles.cardinalLabel, styles.labelW]}>W</Text>
-            
-            <Text style={[styles.degLabel, styles.deg30]}>30</Text>
-            <Text style={[styles.degLabel, styles.deg60]}>60</Text>
-            <Text style={[styles.degLabel, styles.deg120]}>120</Text>
-            <Text style={[styles.degLabel, styles.deg150]}>150</Text>
-            <Text style={[styles.degLabel, styles.deg210]}>210</Text>
-            <Text style={[styles.degLabel, styles.deg240]}>240</Text>
-            <Text style={[styles.degLabel, styles.deg300]}>300</Text>
-            <Text style={[styles.degLabel, styles.deg330]}>330</Text>
-
-            {/* Inner Circle with Qibla Arrow */}
-            <View style={styles.innerCircle}>
-              <View style={[styles.qiblaWrapper, { transform: [{ rotate: `${qiblaDirection}deg` }] }]}>
-                <View style={styles.qiblaArrow}>
-                  <Text style={[styles.qiblaText, isPointingToQibla() && styles.qiblaTextActive]}>KIBLE</Text>
-                  <Ionicons name="caret-up" size={36} color={isPointingToQibla() ? '#27AE60' : '#D4AF37'} />
-                </View>
-              </View>
+            {/* Pusula Görseli - SVG yerine basit tasarım */}
+            <View style={styles.compassFace}>
+              {/* Ana yön çizgileri */}
+              {[0, 45, 90, 135, 180, 225, 270, 315].map((deg, i) => (
+                <View 
+                  key={i} 
+                  style={[
+                    styles.compassLine, 
+                    { transform: [{ rotate: `${deg}deg` }] },
+                    deg % 90 === 0 && styles.compassLineMain
+                  ]} 
+                />
+              ))}
               
-              <View style={[styles.kaabaCenter, isPointingToQibla() && styles.kaabaCenterActive]}>
-                <Ionicons name="cube" size={28} color={isPointingToQibla() ? '#27AE60' : '#D4AF37'} />
-              </View>
+              {/* Yön harfleri */}
+              <Text style={[styles.compassText, styles.textN]}>N</Text>
+              <Text style={[styles.compassText, styles.textE]}>E</Text>
+              <Text style={[styles.compassText, styles.textS]}>S</Text>
+              <Text style={[styles.compassText, styles.textW]}>W</Text>
+              
+              {/* Derece işaretleri */}
+              <Text style={[styles.degreeText, styles.deg30]}>30</Text>
+              <Text style={[styles.degreeText, styles.deg60]}>60</Text>
+              <Text style={[styles.degreeText, styles.deg120]}>120</Text>
+              <Text style={[styles.degreeText, styles.deg150]}>150</Text>
+              <Text style={[styles.degreeText, styles.deg210]}>210</Text>
+              <Text style={[styles.degreeText, styles.deg240]}>240</Text>
+              <Text style={[styles.degreeText, styles.deg300]}>300</Text>
+              <Text style={[styles.degreeText, styles.deg330]}>330</Text>
             </View>
           </Animated.View>
+
+          {/* Kabe İşaretçisi (Ayrı döner) */}
+          <Animated.View style={[styles.kaabaContainer, { transform: [{ rotate: kaabaRotation }] }]}>
+            <View style={styles.kaabaPointer}>
+              <View style={[styles.kaabaArrow, isPointingToQibla() && styles.kaabaArrowActive]} />
+              <Text style={[styles.kaabaText, isPointingToQibla() && styles.kaabaTextActive]}>🕋</Text>
+            </View>
+          </Animated.View>
+
+          {/* Merkez Daire */}
+          <View style={[styles.centerCircle, isPointingToQibla() && styles.centerCircleActive]}>
+            <Ionicons name="navigate" size={24} color={isPointingToQibla() ? '#27AE60' : '#D4AF37'} />
+          </View>
         </View>
 
-        {/* Status */}
+        {/* Bilgi Kartları */}
+        <View style={styles.infoCards}>
+          <View style={styles.infoCard}>
+            <Text style={styles.infoLabel}>Kıble Açısı</Text>
+            <Text style={styles.infoValue}>{qiblaAngleDisplay.toFixed(1)}°</Text>
+          </View>
+          <View style={styles.infoCard}>
+            <Text style={styles.infoLabel}>Kabe'ye Uzaklık</Text>
+            <Text style={styles.infoValue}>{distance?.toLocaleString()} km</Text>
+          </View>
+        </View>
+
+        {/* Durum Çubuğu */}
         <View style={[styles.statusBar, isPointingToQibla() && styles.statusBarActive]}>
           <Text style={[styles.statusText, isPointingToQibla() && styles.statusTextActive]}>
             {getDirectionText()}
           </Text>
         </View>
 
-        {/* Calibration */}
-        <View style={styles.calibrationBox}>
-          <Text style={styles.calibrationTitle}>Pusula Kalibrasyonu</Text>
-          <Text style={styles.calibrationHint}>Pusula yanlış gösteriyorsa ayarlayın</Text>
-          
-          <View style={styles.calButtons}>
-            <TouchableOpacity style={styles.calBtn} onPress={() => adjustCalibration(-10)}>
-              <Text style={styles.calBtnText}>-10°</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.calBtn} onPress={() => adjustCalibration(-1)}>
-              <Text style={styles.calBtnText}>-1°</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.calBtnReset} onPress={resetCalibration}>
-              <Text style={styles.calBtnText}>Sıfırla</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.calBtn} onPress={() => adjustCalibration(1)}>
-              <Text style={styles.calBtnText}>+1°</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.calBtn} onPress={() => adjustCalibration(10)}>
-              <Text style={styles.calBtnText}>+10°</Text>
-            </TouchableOpacity>
-          </View>
-
-          <TouchableOpacity style={styles.northSetBtn} onPress={setAsNorth}>
-            <Ionicons name="navigate" size={16} color="#0F0F1A" />
-            <Text style={styles.northSetBtnText}>Şu anı Kuzey olarak ayarla</Text>
-          </TouchableOpacity>
-
-          {calibrationOffset !== 0 && (
-            <Text style={styles.offsetLabel}>Kalibrasyon: {calibrationOffset > 0 ? '+' : ''}{calibrationOffset.toFixed(0)}°</Text>
-          )}
+        {/* Kalibrasyon İpucu */}
+        <View style={styles.hintBox}>
+          <Ionicons name="information-circle" size={18} color="#8E8E93" />
+          <Text style={styles.hintText}>
+            Daha doğru sonuç için telefonunuzu 8 şeklinde hareket ettirerek kalibre edin
+          </Text>
         </View>
       </ScrollView>
     </SafeAreaView>
