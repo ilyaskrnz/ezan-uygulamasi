@@ -8,11 +8,10 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   Dimensions,
-  ScrollView,
-  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useLanguage } from '../src/i18n/LanguageContext';
 
 let Location: any = null;
@@ -24,10 +23,10 @@ if (Platform.OS !== 'web') {
   Magnetometer = Sensors.Magnetometer;
 }
 
-const { width } = Dimensions.get('window');
-const COMPASS_SIZE = Math.min(width - 40, 300);
+const { width, height } = Dimensions.get('window');
+const COMPASS_SIZE = Math.min(width - 50, 320);
 
-// Kabe koordinatları (kesin değerler)
+// Kabe koordinatları
 const KAABA_LAT = 21.4225;
 const KAABA_LNG = 39.8264;
 
@@ -38,9 +37,11 @@ export default function QiblaScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [distance, setDistance] = useState<number | null>(null);
+  const [cityName, setCityName] = useState<string>('');
   
   const compassAnim = useRef(new Animated.Value(0)).current;
   const kaabaAnim = useRef(new Animated.Value(0)).current;
+  const glowAnim = useRef(new Animated.Value(0)).current;
   const [subscription, setSubscription] = useState<any>(null);
 
   useEffect(() => {
@@ -50,27 +51,42 @@ export default function QiblaScreen() {
     };
   }, []);
 
-  // Pusula dönüşü için animasyon
+  // Pusula animasyonu
   useEffect(() => {
     const compassRotate = 360 - compassDegree;
-    Animated.timing(compassAnim, {
+    Animated.spring(compassAnim, {
       toValue: compassRotate,
-      duration: 100,
       useNativeDriver: true,
+      tension: 50,
+      friction: 10,
     }).start();
   }, [magnetometer]);
 
-  // Kabe dönüşü için animasyon
+  // Kabe animasyonu
   useEffect(() => {
     const kaabaRotate = 360 - compassDegree + qiblad;
-    Animated.timing(kaabaAnim, {
+    Animated.spring(kaabaAnim, {
       toValue: kaabaRotate,
-      duration: 100,
       useNativeDriver: true,
+      tension: 50,
+      friction: 10,
     }).start();
   }, [magnetometer, qiblad]);
 
-  // GitHub projesinden alınan açı hesaplama fonksiyonu
+  // Kıble yönünde parlama efekti
+  useEffect(() => {
+    if (isPointingToQibla()) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(glowAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+          Animated.timing(glowAnim, { toValue: 0.5, duration: 800, useNativeDriver: true }),
+        ])
+      ).start();
+    } else {
+      glowAnim.setValue(0);
+    }
+  }, [magnetometer, qiblad]);
+
   const angle = (data: { x: number; y: number; z: number }) => {
     let angle = 0;
     if (data) {
@@ -84,12 +100,10 @@ export default function QiblaScreen() {
     return Math.round(angle);
   };
 
-  // GitHub projesinden alınan derece hesaplama
   const degree = (magnetometer: number) => {
     return magnetometer - 90 >= 0 ? magnetometer - 90 : magnetometer + 271;
   };
 
-  // GitHub projesinden alınan kıble hesaplama
   const calculateQibla = (latitude: number, longitude: number) => {
     const PI = Math.PI;
     let latk = (KAABA_LAT * PI) / 180.0;
@@ -125,7 +139,6 @@ export default function QiblaScreen() {
     }
 
     try {
-      // Manyetometre kontrolü
       if (!Magnetometer) {
         setError('Pusula bu cihazda kullanılamıyor');
         setLoading(false);
@@ -139,7 +152,6 @@ export default function QiblaScreen() {
         return;
       }
 
-      // Konum izni
       if (!Location) {
         setError(t.qibla.permissionRequired);
         setLoading(false);
@@ -153,15 +165,20 @@ export default function QiblaScreen() {
         return;
       }
 
-      // Konum al
       const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
       const { latitude, longitude } = loc.coords;
       
-      // Kıble yönünü hesapla
+      // Şehir adını al
+      try {
+        const [address] = await Location.reverseGeocodeAsync({ latitude, longitude });
+        if (address) {
+          setCityName(address.city || address.district || address.region || '');
+        }
+      } catch (e) {}
+      
       calculateQibla(latitude, longitude);
       setDistance(Math.round(calculateDistance(latitude, longitude, KAABA_LAT, KAABA_LNG)));
       
-      // Manyetometreyi başlat
       Magnetometer.setUpdateInterval(100);
       const sub = Magnetometer.addListener((data: { x: number; y: number; z: number }) => {
         setMagnetometer(angle(data));
@@ -175,36 +192,31 @@ export default function QiblaScreen() {
     }
   };
 
-  // Hesaplanmış değerler
   const compassDegree = degree(magnetometer);
-  const compassRotate = 360 - compassDegree;
-  const kaabaRotate = 360 - compassDegree + qiblad;
-
-  // Yön metni
+  
   const getDirectionName = (deg: number) => {
-    if (deg >= 337.5 || deg < 22.5) return 'Kuzey';
-    if (deg >= 22.5 && deg < 67.5) return 'Kuzeydoğu';
-    if (deg >= 67.5 && deg < 112.5) return 'Doğu';
-    if (deg >= 112.5 && deg < 157.5) return 'Güneydoğu';
-    if (deg >= 157.5 && deg < 202.5) return 'Güney';
-    if (deg >= 202.5 && deg < 247.5) return 'Güneybatı';
-    if (deg >= 247.5 && deg < 292.5) return 'Batı';
-    return 'Kuzeybatı';
+    if (deg >= 337.5 || deg < 22.5) return 'K';
+    if (deg >= 22.5 && deg < 67.5) return 'KD';
+    if (deg >= 67.5 && deg < 112.5) return 'D';
+    if (deg >= 112.5 && deg < 157.5) return 'GD';
+    if (deg >= 157.5 && deg < 202.5) return 'G';
+    if (deg >= 202.5 && deg < 247.5) return 'GB';
+    if (deg >= 247.5 && deg < 292.5) return 'B';
+    return 'KB';
   };
 
-  // Kıbleye dönük mü?
   const isPointingToQibla = (): boolean => {
     const qiblaAngle = ((qiblad % 360) + 360) % 360;
-    return compassDegree >= Math.round(qiblaAngle - 5) && compassDegree <= Math.round(qiblaAngle + 5);
+    return compassDegree >= Math.round(qiblaAngle - 8) && compassDegree <= Math.round(qiblaAngle + 8);
   };
 
   const getDirectionText = (): string => {
     const qiblaAngle = ((qiblad % 360) + 360) % 360;
     const diff = ((qiblaAngle - compassDegree + 540) % 360) - 180;
     
-    if (Math.abs(diff) <= 5) return '✓ Kıble Yönündesiniz!';
-    if (diff > 0) return `→ Sağa ${Math.abs(Math.round(diff))}° dönün`;
-    return `← Sola ${Math.abs(Math.round(diff))}° dönün`;
+    if (Math.abs(diff) <= 8) return 'Kıble Yönündesiniz';
+    if (diff > 0) return `Sağa ${Math.abs(Math.round(diff))}° dönün`;
+    return `Sola ${Math.abs(Math.round(diff))}° dönün`;
   };
 
   const compassRotation = compassAnim.interpolate({
@@ -219,388 +231,476 @@ export default function QiblaScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.centerContent}>
-          <ActivityIndicator size="large" color="#D4AF37" />
-          <Text style={styles.loadingText}>{t.qibla.loading}</Text>
-        </View>
-      </SafeAreaView>
+      <LinearGradient colors={['#0a1628', '#1a2d4a', '#0a1628']} style={styles.container}>
+        <SafeAreaView style={styles.centerContent}>
+          <View style={styles.loadingBox}>
+            <ActivityIndicator size="large" color="#c9a227" />
+            <Text style={styles.loadingText}>{t.qibla.loading}</Text>
+            <Text style={styles.loadingSubText}>Konum alınıyor...</Text>
+          </View>
+        </SafeAreaView>
+      </LinearGradient>
     );
   }
 
   if (error) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.centerContent}>
-          <Ionicons name="alert-circle" size={60} color="#E74C3C" />
+      <LinearGradient colors={['#0a1628', '#1a2d4a', '#0a1628']} style={styles.container}>
+        <SafeAreaView style={styles.centerContent}>
+          <Ionicons name="warning" size={70} color="#e74c3c" />
           <Text style={styles.errorText}>{error}</Text>
           <TouchableOpacity style={styles.retryBtn} onPress={initCompass}>
             <Text style={styles.retryBtnText}>{t.qibla.retry}</Text>
           </TouchableOpacity>
-        </View>
-      </SafeAreaView>
+        </SafeAreaView>
+      </LinearGradient>
     );
   }
 
   const qiblaAngleDisplay = ((qiblad % 360) + 360) % 360;
+  const pointing = isPointingToQibla();
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+    <LinearGradient colors={['#0a1628', '#1a2d4a', '#0a1628']} style={styles.container}>
+      <SafeAreaView style={styles.safeArea}>
         {/* Header */}
-        <Text style={styles.title}>Kıble Pusulası</Text>
-        
-        {/* Yön ve Derece */}
-        <View style={styles.directionBox}>
-          <Text style={styles.directionName}>{getDirectionName(compassDegree)}</Text>
-          <Text style={[
-            styles.headingBig, 
-            isPointingToQibla() && styles.headingActive
-          ]}>
+        <View style={styles.header}>
+          <Text style={styles.title}>🕌 Kıble Pusulası</Text>
+          {cityName ? <Text style={styles.cityText}>{cityName}</Text> : null}
+        </View>
+
+        {/* Derece Göstergesi */}
+        <View style={styles.degreeBox}>
+          <Text style={styles.directionLabel}>{getDirectionName(compassDegree)}</Text>
+          <Text style={[styles.degreeText, pointing && styles.degreeTextActive]}>
             {compassDegree}°
           </Text>
         </View>
 
-        {/* Pusula */}
-        <View style={styles.compassContainer}>
-          {/* Üst Kırmızı İşaretçi */}
-          <View style={styles.northPointer}>
-            <View style={styles.pointerTriangle} />
-          </View>
+        {/* Ana Pusula Alanı */}
+        <View style={styles.compassWrapper}>
+          {/* Dış Halka */}
+          <View style={styles.outerRing}>
+            {/* Üst Kırmızı İşaretçi */}
+            <View style={styles.topMarker}>
+              <View style={styles.markerArrow} />
+            </View>
 
-          {/* Dönen Pusula */}
-          <Animated.View style={[styles.compassDial, { transform: [{ rotate: compassRotation }] }]}>
-            {/* Pusula Görseli - SVG yerine basit tasarım */}
-            <View style={styles.compassFace}>
-              {/* Ana yön çizgileri */}
-              {[0, 45, 90, 135, 180, 225, 270, 315].map((deg, i) => (
-                <View 
-                  key={i} 
-                  style={[
-                    styles.compassLine, 
-                    { transform: [{ rotate: `${deg}deg` }] },
-                    deg % 90 === 0 && styles.compassLineMain
-                  ]} 
-                />
-              ))}
-              
+            {/* Dönen Pusula Kadranı */}
+            <Animated.View style={[styles.compassDial, { transform: [{ rotate: compassRotation }] }]}>
+              {/* Derece çizgileri */}
+              {[...Array(72)].map((_, i) => {
+                const deg = i * 5;
+                const isMain = deg % 90 === 0;
+                const isMid = deg % 30 === 0 && !isMain;
+                return (
+                  <View
+                    key={i}
+                    style={[
+                      styles.tickMark,
+                      { transform: [{ rotate: `${deg}deg` }] },
+                    ]}
+                  >
+                    <View style={[
+                      styles.tick,
+                      isMain && styles.tickMain,
+                      isMid && styles.tickMid,
+                    ]} />
+                  </View>
+                );
+              })}
+
               {/* Yön harfleri */}
-              <Text style={[styles.compassText, styles.textN]}>N</Text>
-              <Text style={[styles.compassText, styles.textE]}>E</Text>
-              <Text style={[styles.compassText, styles.textS]}>S</Text>
-              <Text style={[styles.compassText, styles.textW]}>W</Text>
+              <View style={[styles.cardinalWrapper, styles.cardinalN]}>
+                <Text style={[styles.cardinalText, styles.cardinalTextN]}>N</Text>
+              </View>
+              <View style={[styles.cardinalWrapper, styles.cardinalE]}>
+                <Text style={styles.cardinalText}>E</Text>
+              </View>
+              <View style={[styles.cardinalWrapper, styles.cardinalS]}>
+                <Text style={styles.cardinalText}>S</Text>
+              </View>
+              <View style={[styles.cardinalWrapper, styles.cardinalW]}>
+                <Text style={styles.cardinalText}>W</Text>
+              </View>
               
-              {/* Derece işaretleri */}
-              <Text style={[styles.degreeText, styles.deg30]}>30</Text>
-              <Text style={[styles.degreeText, styles.deg60]}>60</Text>
-              <Text style={[styles.degreeText, styles.deg120]}>120</Text>
-              <Text style={[styles.degreeText, styles.deg150]}>150</Text>
-              <Text style={[styles.degreeText, styles.deg210]}>210</Text>
-              <Text style={[styles.degreeText, styles.deg240]}>240</Text>
-              <Text style={[styles.degreeText, styles.deg300]}>300</Text>
-              <Text style={[styles.degreeText, styles.deg330]}>330</Text>
+              {/* İç dekoratif daire */}
+              <View style={styles.innerDecoCircle} />
+            </Animated.View>
+
+            {/* Kabe İşaretçisi (Ayrı döner) */}
+            <Animated.View style={[styles.kaabaWrapper, { transform: [{ rotate: kaabaRotation }] }]}>
+              <View style={styles.kaabaPointerContainer}>
+                <View style={[styles.kaabaLine, pointing && styles.kaabaLineActive]} />
+                <View style={[styles.kaabaIconCircle, pointing && styles.kaabaIconCircleActive]}>
+                  <Text style={styles.kaabaEmoji}>🕋</Text>
+                </View>
+              </View>
+            </Animated.View>
+
+            {/* Merkez */}
+            <View style={[styles.centerHub, pointing && styles.centerHubActive]}>
+              <View style={[styles.centerInner, pointing && styles.centerInnerActive]}>
+                <Ionicons 
+                  name="locate" 
+                  size={26} 
+                  color={pointing ? '#2ecc71' : '#c9a227'} 
+                />
+              </View>
             </View>
-          </Animated.View>
-
-          {/* Kabe İşaretçisi (Ayrı döner) */}
-          <Animated.View style={[styles.kaabaContainer, { transform: [{ rotate: kaabaRotation }] }]}>
-            <View style={styles.kaabaPointer}>
-              <View style={[styles.kaabaArrow, isPointingToQibla() && styles.kaabaArrowActive]} />
-              <Text style={[styles.kaabaText, isPointingToQibla() && styles.kaabaTextActive]}>🕋</Text>
-            </View>
-          </Animated.View>
-
-          {/* Merkez Daire */}
-          <View style={[styles.centerCircle, isPointingToQibla() && styles.centerCircleActive]}>
-            <Ionicons name="navigate" size={24} color={isPointingToQibla() ? '#27AE60' : '#D4AF37'} />
-          </View>
-        </View>
-
-        {/* Bilgi Kartları */}
-        <View style={styles.infoCards}>
-          <View style={styles.infoCard}>
-            <Text style={styles.infoLabel}>Kıble Açısı</Text>
-            <Text style={styles.infoValue}>{qiblaAngleDisplay.toFixed(1)}°</Text>
-          </View>
-          <View style={styles.infoCard}>
-            <Text style={styles.infoLabel}>Kabe'ye Uzaklık</Text>
-            <Text style={styles.infoValue}>{distance?.toLocaleString()} km</Text>
           </View>
         </View>
 
         {/* Durum Çubuğu */}
-        <View style={[styles.statusBar, isPointingToQibla() && styles.statusBarActive]}>
-          <Text style={[styles.statusText, isPointingToQibla() && styles.statusTextActive]}>
+        <View style={[styles.statusCard, pointing && styles.statusCardActive]}>
+          {pointing && <Ionicons name="checkmark-circle" size={24} color="#2ecc71" style={{ marginRight: 8 }} />}
+          <Text style={[styles.statusText, pointing && styles.statusTextActive]}>
             {getDirectionText()}
           </Text>
         </View>
 
-        {/* Kalibrasyon İpucu */}
-        <View style={styles.hintBox}>
-          <Ionicons name="information-circle" size={18} color="#8E8E93" />
-          <Text style={styles.hintText}>
-            Daha doğru sonuç için telefonunuzu 8 şeklinde hareket ettirerek kalibre edin
-          </Text>
+        {/* Bilgi Kartları */}
+        <View style={styles.infoRow}>
+          <View style={styles.infoCard}>
+            <Ionicons name="compass-outline" size={22} color="#c9a227" />
+            <Text style={styles.infoValue}>{qiblaAngleDisplay.toFixed(0)}°</Text>
+            <Text style={styles.infoLabel}>Kıble Açısı</Text>
+          </View>
+          <View style={styles.infoCard}>
+            <Ionicons name="location-outline" size={22} color="#c9a227" />
+            <Text style={styles.infoValue}>{distance?.toLocaleString()}</Text>
+            <Text style={styles.infoLabel}>km uzaklık</Text>
+          </View>
         </View>
-      </ScrollView>
-    </SafeAreaView>
+
+        {/* Alt İpucu */}
+        <View style={styles.hintBar}>
+          <Ionicons name="sync" size={16} color="#7f8c8d" />
+          <Text style={styles.hintText}>Kalibre için telefonu 8 şeklinde çevirin</Text>
+        </View>
+      </SafeAreaView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: '#0F0F1A' 
+  container: {
+    flex: 1,
   },
-  centerContent: { 
-    flex: 1, 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    padding: 40 
-  },
-  scrollContent: { 
-    alignItems: 'center', 
-    paddingHorizontal: 20, 
-    paddingBottom: 40 
-  },
-  loadingText: { 
-    color: '#FFF', 
-    marginTop: 16, 
-    fontSize: 16 
-  },
-  errorText: { 
-    color: '#E74C3C', 
-    fontSize: 16, 
-    textAlign: 'center', 
-    marginVertical: 20 
-  },
-  retryBtn: { 
-    backgroundColor: '#D4AF37', 
-    paddingHorizontal: 28, 
-    paddingVertical: 12, 
-    borderRadius: 25 
-  },
-  retryBtnText: { 
-    color: '#0F0F1A', 
-    fontSize: 16, 
-    fontWeight: '600' 
-  },
-  
-  title: { 
-    color: '#FFF', 
-    fontSize: 26, 
-    fontWeight: '700', 
-    marginTop: 10,
-    marginBottom: 20 
-  },
-  
-  directionBox: {
+  safeArea: {
+    flex: 1,
     alignItems: 'center',
-    marginBottom: 20,
   },
-  directionName: {
-    color: '#8E8E93',
+  centerContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 30,
+  },
+  loadingBox: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    padding: 40,
+    borderRadius: 20,
+  },
+  loadingText: {
+    color: '#fff',
+    fontSize: 18,
+    marginTop: 20,
+    fontWeight: '600',
+  },
+  loadingSubText: {
+    color: '#7f8c8d',
     fontSize: 14,
-    marginBottom: 4,
+    marginTop: 8,
   },
-  headingBig: { 
-    color: '#FFF', 
-    fontSize: 48, 
-    fontWeight: '200' 
+  errorText: {
+    color: '#e74c3c',
+    fontSize: 16,
+    textAlign: 'center',
+    marginVertical: 20,
+    paddingHorizontal: 20,
   },
-  headingActive: {
-    color: '#27AE60',
+  retryBtn: {
+    backgroundColor: '#c9a227',
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    borderRadius: 30,
   },
-  
-  compassContainer: { 
-    width: COMPASS_SIZE + 40, 
-    height: COMPASS_SIZE + 40, 
-    alignItems: 'center', 
+  retryBtnText: {
+    color: '#0a1628',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+
+  header: {
+    alignItems: 'center',
+    marginTop: 10,
+    marginBottom: 5,
+  },
+  title: {
+    color: '#fff',
+    fontSize: 24,
+    fontWeight: '700',
+  },
+  cityText: {
+    color: '#7f8c8d',
+    fontSize: 14,
+    marginTop: 4,
+  },
+
+  degreeBox: {
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  directionLabel: {
+    color: '#c9a227',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  degreeText: {
+    color: '#fff',
+    fontSize: 44,
+    fontWeight: '200',
+  },
+  degreeTextActive: {
+    color: '#2ecc71',
+  },
+
+  compassWrapper: {
+    alignItems: 'center',
     justifyContent: 'center',
     marginVertical: 10,
   },
-  
-  northPointer: { 
-    position: 'absolute', 
-    top: 0, 
-    zIndex: 20,
+
+  outerRing: {
+    width: COMPASS_SIZE + 30,
+    height: COMPASS_SIZE + 30,
+    borderRadius: (COMPASS_SIZE + 30) / 2,
+    backgroundColor: 'rgba(201, 162, 39, 0.1)',
     alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(201, 162, 39, 0.3)',
   },
-  pointerTriangle: {
+
+  topMarker: {
+    position: 'absolute',
+    top: -5,
+    zIndex: 100,
+  },
+  markerArrow: {
     width: 0,
     height: 0,
-    borderLeftWidth: 12,
-    borderRightWidth: 12,
-    borderBottomWidth: 20,
+    borderLeftWidth: 14,
+    borderRightWidth: 14,
+    borderBottomWidth: 24,
     borderLeftColor: 'transparent',
     borderRightColor: 'transparent',
-    borderBottomColor: '#E74C3C',
+    borderBottomColor: '#e74c3c',
   },
-  
+
   compassDial: {
     width: COMPASS_SIZE,
     height: COMPASS_SIZE,
     borderRadius: COMPASS_SIZE / 2,
-    backgroundColor: '#1A1A2E',
+    backgroundColor: '#0d1f35',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 3,
-    borderColor: '#2D2D44',
+    borderWidth: 4,
+    borderColor: '#1e3a5f',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 10,
   },
-  
-  compassFace: {
-    width: COMPASS_SIZE - 6,
-    height: COMPASS_SIZE - 6,
-    borderRadius: (COMPASS_SIZE - 6) / 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  
-  compassLine: {
+
+  tickMark: {
     position: 'absolute',
     width: 2,
-    height: COMPASS_SIZE / 2 - 20,
-    backgroundColor: '#3D3D5C',
-    top: 10,
+    height: COMPASS_SIZE / 2,
+    alignItems: 'center',
   },
-  compassLineMain: {
+  tick: {
+    width: 2,
+    height: 10,
+    backgroundColor: '#2c4a6e',
+    marginTop: 8,
+  },
+  tickMain: {
     width: 3,
-    backgroundColor: '#D4AF37',
+    height: 20,
+    backgroundColor: '#c9a227',
   },
-  
-  compassText: {
+  tickMid: {
+    width: 2,
+    height: 15,
+    backgroundColor: '#4a6a8e',
+  },
+
+  cardinalWrapper: {
     position: 'absolute',
-    color: '#D4AF37',
-    fontSize: 18,
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardinalN: { top: 32 },
+  cardinalE: { right: 32 },
+  cardinalS: { bottom: 32 },
+  cardinalW: { left: 32 },
+  cardinalText: {
+    color: '#c9a227',
+    fontSize: 20,
     fontWeight: '700',
   },
-  textN: { top: 30 },
-  textE: { right: 30 },
-  textS: { bottom: 30 },
-  textW: { left: 30 },
-  
-  degreeText: {
-    position: 'absolute',
-    color: '#5D5D7C',
-    fontSize: 11,
+  cardinalTextN: {
+    color: '#e74c3c',
   },
-  deg30: { top: 40, right: 55 },
-  deg60: { top: 55, right: 40 },
-  deg120: { bottom: 55, right: 40 },
-  deg150: { bottom: 40, right: 55 },
-  deg210: { bottom: 40, left: 55 },
-  deg240: { bottom: 55, left: 40 },
-  deg300: { top: 55, left: 40 },
-  deg330: { top: 40, left: 55 },
-  
-  kaabaContainer: {
+
+  innerDecoCircle: {
+    position: 'absolute',
+    width: COMPASS_SIZE - 100,
+    height: COMPASS_SIZE - 100,
+    borderRadius: (COMPASS_SIZE - 100) / 2,
+    borderWidth: 1,
+    borderColor: 'rgba(201, 162, 39, 0.2)',
+  },
+
+  kaabaWrapper: {
     position: 'absolute',
     width: COMPASS_SIZE,
     height: COMPASS_SIZE,
     alignItems: 'center',
-    justifyContent: 'flex-start',
-    zIndex: 15,
   },
-  kaabaPointer: {
+  kaabaPointerContainer: {
     alignItems: 'center',
-    paddingTop: 25,
+    paddingTop: 15,
   },
-  kaabaArrow: {
+  kaabaLine: {
     width: 4,
-    height: 35,
-    backgroundColor: '#D4AF37',
+    height: 50,
+    backgroundColor: '#c9a227',
     borderRadius: 2,
-    marginBottom: 5,
   },
-  kaabaArrowActive: {
-    backgroundColor: '#27AE60',
+  kaabaLineActive: {
+    backgroundColor: '#2ecc71',
+    shadowColor: '#2ecc71',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 10,
   },
-  kaabaText: {
-    fontSize: 28,
-  },
-  kaabaTextActive: {
-    transform: [{ scale: 1.2 }],
-  },
-  
-  centerCircle: {
-    position: 'absolute',
+  kaabaIconCircle: {
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: '#1A1A2E',
+    backgroundColor: '#1a3a5c',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#D4AF37',
-    zIndex: 10,
+    borderWidth: 3,
+    borderColor: '#c9a227',
+    marginTop: -5,
   },
-  centerCircleActive: {
-    borderColor: '#27AE60',
-    backgroundColor: '#0D1A12',
+  kaabaIconCircleActive: {
+    borderColor: '#2ecc71',
+    backgroundColor: '#0d2818',
+    shadowColor: '#2ecc71',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 15,
   },
-  
-  infoCards: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 20,
+  kaabaEmoji: {
+    fontSize: 26,
   },
-  infoCard: {
-    flex: 1,
-    backgroundColor: '#1A1A2E',
-    borderRadius: 12,
-    padding: 14,
+
+  centerHub: {
+    position: 'absolute',
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: '#0d1f35',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#2D2D44',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: '#c9a227',
   },
-  infoLabel: {
-    color: '#8E8E93',
-    fontSize: 12,
-    marginBottom: 4,
+  centerHubActive: {
+    borderColor: '#2ecc71',
   },
-  infoValue: {
-    color: '#D4AF37',
-    fontSize: 18,
-    fontWeight: '600',
+  centerInner: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#1a3a5c',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  
-  statusBar: {
-    backgroundColor: '#1A1A2E',
+  centerInnerActive: {
+    backgroundColor: '#0d2818',
+  },
+
+  statusCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.05)',
     paddingHorizontal: 28,
     paddingVertical: 14,
     borderRadius: 30,
-    marginTop: 20,
+    marginTop: 15,
     borderWidth: 1,
-    borderColor: '#2D2D44',
+    borderColor: 'rgba(201, 162, 39, 0.3)',
   },
-  statusBarActive: { 
-    backgroundColor: '#0D1A12', 
-    borderColor: '#27AE60' 
+  statusCardActive: {
+    backgroundColor: 'rgba(46, 204, 113, 0.15)',
+    borderColor: '#2ecc71',
   },
-  statusText: { 
-    color: '#FFF', 
-    fontSize: 16, 
-    fontWeight: '600' 
+  statusText: {
+    color: '#fff',
+    fontSize: 17,
+    fontWeight: '600',
   },
-  statusTextActive: { 
-    color: '#27AE60' 
+  statusTextActive: {
+    color: '#2ecc71',
   },
-  
-  hintBox: {
+
+  infoRow: {
+    flexDirection: 'row',
+    gap: 15,
+    marginTop: 20,
+    paddingHorizontal: 20,
+  },
+  infoCard: {
+    flex: 1,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 16,
+    padding: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(201, 162, 39, 0.2)',
+  },
+  infoValue: {
+    color: '#fff',
+    fontSize: 22,
+    fontWeight: '700',
+    marginTop: 6,
+  },
+  infoLabel: {
+    color: '#7f8c8d',
+    fontSize: 12,
+    marginTop: 2,
+  },
+
+  hintBar: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     marginTop: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#1A1A2E',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#2D2D44',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
   },
   hintText: {
-    color: '#8E8E93',
-    fontSize: 12,
-    flex: 1,
+    color: '#7f8c8d',
+    fontSize: 13,
   },
 });
