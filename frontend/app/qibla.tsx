@@ -348,24 +348,94 @@ export default function QiblaScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0F0F1A' },
-  centerContent: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 },
-  scrollContent: { alignItems: 'center', paddingHorizontal: 20, paddingBottom: 40 },
-  loadingText: { color: '#FFF', marginTop: 16, fontSize: 16 },
-  errorText: { color: '#E74C3C', fontSize: 16, textAlign: 'center', marginVertical: 20 },
-  retryBtn: { backgroundColor: '#D4AF37', paddingHorizontal: 28, paddingVertical: 12, borderRadius: 25 },
-  retryBtnText: { color: '#0F0F1A', fontSize: 16, fontWeight: '600' },
+  container: { 
+    flex: 1, 
+    backgroundColor: '#0F0F1A' 
+  },
+  centerContent: { 
+    flex: 1, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    padding: 40 
+  },
+  scrollContent: { 
+    alignItems: 'center', 
+    paddingHorizontal: 20, 
+    paddingBottom: 40 
+  },
+  loadingText: { 
+    color: '#FFF', 
+    marginTop: 16, 
+    fontSize: 16 
+  },
+  errorText: { 
+    color: '#E74C3C', 
+    fontSize: 16, 
+    textAlign: 'center', 
+    marginVertical: 20 
+  },
+  retryBtn: { 
+    backgroundColor: '#D4AF37', 
+    paddingHorizontal: 28, 
+    paddingVertical: 12, 
+    borderRadius: 25 
+  },
+  retryBtnText: { 
+    color: '#0F0F1A', 
+    fontSize: 16, 
+    fontWeight: '600' 
+  },
   
-  title: { color: '#FFF', fontSize: 24, fontWeight: '700', marginTop: 10 },
-  subHeader: { flexDirection: 'row', gap: 20, marginTop: 6, marginBottom: 16 },
-  qiblaInfo: { color: '#D4AF37', fontSize: 14, fontWeight: '600' },
-  distanceInfo: { color: '#8E8E93', fontSize: 14 },
+  title: { 
+    color: '#FFF', 
+    fontSize: 26, 
+    fontWeight: '700', 
+    marginTop: 10,
+    marginBottom: 20 
+  },
   
-  headingBig: { color: '#FFF', fontSize: 56, fontWeight: '200' },
-  headingLabel: { color: '#8E8E93', fontSize: 13, marginBottom: 20 },
+  directionBox: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  directionName: {
+    color: '#8E8E93',
+    fontSize: 14,
+    marginBottom: 4,
+  },
+  headingBig: { 
+    color: '#FFF', 
+    fontSize: 48, 
+    fontWeight: '200' 
+  },
+  headingActive: {
+    color: '#27AE60',
+  },
   
-  compassContainer: { width: COMPASS_SIZE + 40, height: COMPASS_SIZE + 40, alignItems: 'center', justifyContent: 'center' },
-  northPointer: { position: 'absolute', top: 0, zIndex: 10 },
+  compassContainer: { 
+    width: COMPASS_SIZE + 40, 
+    height: COMPASS_SIZE + 40, 
+    alignItems: 'center', 
+    justifyContent: 'center',
+    marginVertical: 10,
+  },
+  
+  northPointer: { 
+    position: 'absolute', 
+    top: 0, 
+    zIndex: 20,
+    alignItems: 'center',
+  },
+  pointerTriangle: {
+    width: 0,
+    height: 0,
+    borderLeftWidth: 12,
+    borderRightWidth: 12,
+    borderBottomWidth: 20,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderBottomColor: '#E74C3C',
+  },
   
   compassDial: {
     width: COMPASS_SIZE,
@@ -378,102 +448,159 @@ const styles = StyleSheet.create({
     borderColor: '#2D2D44',
   },
   
-  tickWrapper: { position: 'absolute', width: 2, height: COMPASS_SIZE / 2, alignItems: 'center' },
-  tick: { width: 1, height: 8, backgroundColor: '#3D3D5C', marginTop: 6 },
-  tickMajor: { width: 2, height: 14, backgroundColor: '#6D6D8C' },
-  tickCardinal: { width: 3, height: 18, backgroundColor: '#D4AF37' },
-  
-  cardinalLabel: { position: 'absolute', color: '#D4AF37', fontSize: 16, fontWeight: '700' },
-  labelN: { top: 28 },
-  labelE: { right: 28 },
-  labelS: { bottom: 28 },
-  labelW: { left: 28 },
-  
-  degLabel: { position: 'absolute', color: '#5D5D7C', fontSize: 11 },
-  deg30: { top: 38, right: 52 },
-  deg60: { top: 52, right: 38 },
-  deg120: { bottom: 52, right: 38 },
-  deg150: { bottom: 38, right: 52 },
-  deg210: { bottom: 38, left: 52 },
-  deg240: { bottom: 52, left: 38 },
-  deg300: { top: 52, left: 38 },
-  deg330: { top: 38, left: 52 },
-  
-  innerCircle: {
-    width: COMPASS_SIZE - 80,
-    height: COMPASS_SIZE - 80,
-    borderRadius: (COMPASS_SIZE - 80) / 2,
-    backgroundColor: '#0F0F1A',
+  compassFace: {
+    width: COMPASS_SIZE - 6,
+    height: COMPASS_SIZE - 6,
+    borderRadius: (COMPASS_SIZE - 6) / 2,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#2D2D44',
   },
   
-  qiblaWrapper: {
+  compassLine: {
     position: 'absolute',
-    width: COMPASS_SIZE - 80,
-    height: COMPASS_SIZE - 80,
+    width: 2,
+    height: COMPASS_SIZE / 2 - 20,
+    backgroundColor: '#3D3D5C',
+    top: 10,
+  },
+  compassLineMain: {
+    width: 3,
+    backgroundColor: '#D4AF37',
+  },
+  
+  compassText: {
+    position: 'absolute',
+    color: '#D4AF37',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  textN: { top: 30 },
+  textE: { right: 30 },
+  textS: { bottom: 30 },
+  textW: { left: 30 },
+  
+  degreeText: {
+    position: 'absolute',
+    color: '#5D5D7C',
+    fontSize: 11,
+  },
+  deg30: { top: 40, right: 55 },
+  deg60: { top: 55, right: 40 },
+  deg120: { bottom: 55, right: 40 },
+  deg150: { bottom: 40, right: 55 },
+  deg210: { bottom: 40, left: 55 },
+  deg240: { bottom: 55, left: 40 },
+  deg300: { top: 55, left: 40 },
+  deg330: { top: 40, left: 55 },
+  
+  kaabaContainer: {
+    position: 'absolute',
+    width: COMPASS_SIZE,
+    height: COMPASS_SIZE,
     alignItems: 'center',
     justifyContent: 'flex-start',
-    paddingTop: 8,
+    zIndex: 15,
   },
-  qiblaArrow: { alignItems: 'center' },
-  qiblaText: { color: '#D4AF37', fontSize: 10, fontWeight: '700', letterSpacing: 1, marginBottom: -6 },
-  qiblaTextActive: { color: '#27AE60' },
+  kaabaPointer: {
+    alignItems: 'center',
+    paddingTop: 25,
+  },
+  kaabaArrow: {
+    width: 4,
+    height: 35,
+    backgroundColor: '#D4AF37',
+    borderRadius: 2,
+    marginBottom: 5,
+  },
+  kaabaArrowActive: {
+    backgroundColor: '#27AE60',
+  },
+  kaabaText: {
+    fontSize: 28,
+  },
+  kaabaTextActive: {
+    transform: [{ scale: 1.2 }],
+  },
   
-  kaabaCenter: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+  centerCircle: {
+    position: 'absolute',
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     backgroundColor: '#1A1A2E',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
     borderColor: '#D4AF37',
+    zIndex: 10,
   },
-  kaabaCenterActive: { borderColor: '#27AE60', backgroundColor: '#0D1A12' },
+  centerCircleActive: {
+    borderColor: '#27AE60',
+    backgroundColor: '#0D1A12',
+  },
+  
+  infoCards: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 20,
+  },
+  infoCard: {
+    flex: 1,
+    backgroundColor: '#1A1A2E',
+    borderRadius: 12,
+    padding: 14,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#2D2D44',
+  },
+  infoLabel: {
+    color: '#8E8E93',
+    fontSize: 12,
+    marginBottom: 4,
+  },
+  infoValue: {
+    color: '#D4AF37',
+    fontSize: 18,
+    fontWeight: '600',
+  },
   
   statusBar: {
     backgroundColor: '#1A1A2E',
     paddingHorizontal: 28,
     paddingVertical: 14,
     borderRadius: 30,
-    marginTop: 24,
+    marginTop: 20,
     borderWidth: 1,
     borderColor: '#2D2D44',
   },
-  statusBarActive: { backgroundColor: '#0D1A12', borderColor: '#27AE60' },
-  statusText: { color: '#FFF', fontSize: 16, fontWeight: '600' },
-  statusTextActive: { color: '#27AE60' },
-  
-  calibrationBox: {
-    width: '100%',
-    backgroundColor: '#1A1A2E',
-    borderRadius: 16,
-    padding: 16,
-    marginTop: 24,
-    borderWidth: 1,
-    borderColor: '#2D2D44',
+  statusBarActive: { 
+    backgroundColor: '#0D1A12', 
+    borderColor: '#27AE60' 
   },
-  calibrationTitle: { color: '#FFF', fontSize: 14, fontWeight: '600', textAlign: 'center' },
-  calibrationHint: { color: '#8E8E93', fontSize: 11, textAlign: 'center', marginTop: 4, marginBottom: 14 },
+  statusText: { 
+    color: '#FFF', 
+    fontSize: 16, 
+    fontWeight: '600' 
+  },
+  statusTextActive: { 
+    color: '#27AE60' 
+  },
   
-  calButtons: { flexDirection: 'row', justifyContent: 'center', gap: 8, marginBottom: 14 },
-  calBtn: { backgroundColor: '#2D2D44', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 },
-  calBtnReset: { backgroundColor: '#3D3D5C', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 },
-  calBtnText: { color: '#FFF', fontSize: 13, fontWeight: '600' },
-  
-  northSetBtn: {
+  hintBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#D4AF37',
-    paddingVertical: 10,
-    borderRadius: 20,
+    marginTop: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#1A1A2E',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#2D2D44',
   },
-  northSetBtnText: { color: '#0F0F1A', fontSize: 13, fontWeight: '600' },
-  
-  offsetLabel: { color: '#D4AF37', fontSize: 12, textAlign: 'center', marginTop: 12 },
+  hintText: {
+    color: '#8E8E93',
+    fontSize: 12,
+    flex: 1,
+  },
 });
