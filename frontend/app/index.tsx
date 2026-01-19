@@ -519,16 +519,20 @@ const styles = StyleSheet.create({
   nextPrayerSection: {
     alignItems: 'center',
   },
-  nextPrayerHeader: {
+  nextPrayerBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginBottom: 8,
+    gap: 8,
+    backgroundColor: '#00BFA6',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 25,
+    marginBottom: 16,
   },
   nextPrayerLabel: {
-    color: '#00BFA6',
-    fontSize: 13,
-    fontWeight: '600',
+    color: '#121212',
+    fontSize: 16,
+    fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
