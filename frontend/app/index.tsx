@@ -8,19 +8,21 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Platform,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLanguage } from '../src/i18n/LanguageContext';
 
-// Dynamic import for expo-location (not available on web)
 let Location: any = null;
 if (Platform.OS !== 'web') {
   Location = require('expo-location');
 }
 
+const { width } = Dimensions.get('window');
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 
 interface PrayerTime {
@@ -53,9 +55,8 @@ export default function HomeScreen() {
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [cityName, setCityName] = useState<string>(t.home.locationLoading);
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [nextPrayer, setNextPrayer] = useState<{ name: string; time: string; remaining: string } | null>(null);
+  const [nextPrayer, setNextPrayer] = useState<{ name: string; time: string; remaining: string; hours: number; mins: number; secs: number } | null>(null);
 
-  // Update current time every second
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
@@ -63,24 +64,11 @@ export default function HomeScreen() {
     return () => clearInterval(timer);
   }, []);
 
-  // Calculate next prayer
   useEffect(() => {
     if (prayerData) {
       calculateNextPrayer();
     }
   }, [prayerData, currentTime, t]);
-
-  // Initialize notifications - disabled for Expo Go compatibility
-  // useEffect(() => {
-  //   notificationService.initialize();
-  // }, []);
-
-  // Schedule notifications when prayer data changes - disabled for Expo Go
-  // useEffect(() => {
-  //   if (prayerData) {
-  //     notificationService.schedulePrayerNotifications(prayerData, t.notifications);
-  //   }
-  // }, [prayerData, t]);
 
   const calculateNextPrayer = () => {
     if (!prayerData) return;
@@ -95,39 +83,44 @@ export default function HomeScreen() {
     ];
 
     const now = currentTime;
-    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    const currentSeconds = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
 
     for (const prayer of prayers) {
       const [hours, minutes] = prayer.time.split(':').map(Number);
-      const prayerMinutes = hours * 60 + minutes;
+      const prayerSeconds = hours * 3600 + minutes * 60;
 
-      if (prayerMinutes > currentMinutes) {
-        const diff = prayerMinutes - currentMinutes;
-        const remainingHours = Math.floor(diff / 60);
-        const remainingMins = diff % 60;
+      if (prayerSeconds > currentSeconds) {
+        const diff = prayerSeconds - currentSeconds;
+        const remainingHours = Math.floor(diff / 3600);
+        const remainingMins = Math.floor((diff % 3600) / 60);
+        const remainingSecs = diff % 60;
         
         setNextPrayer({
           name: prayer.name,
           time: prayer.time,
           remaining: remainingHours > 0 
             ? `${remainingHours} saat ${remainingMins} dk`
-            : `${remainingMins} dk`,
+            : `${remainingMins} dk ${remainingSecs} sn`,
+          hours: remainingHours,
+          mins: remainingMins,
+          secs: remainingSecs,
         });
         return;
       }
     }
 
-    // If all prayers passed, next is tomorrow's Fajr
     setNextPrayer({
       name: t.prayers.fajr,
       time: prayerData.fajr,
       remaining: t.home.tomorrow,
+      hours: 0,
+      mins: 0,
+      secs: 0,
     });
   };
 
   const getLocation = async () => {
     try {
-      // Check for saved city first
       const savedCity = await AsyncStorage.getItem('selectedCity');
       if (savedCity) {
         const city = JSON.parse(savedCity);
@@ -137,7 +130,6 @@ export default function HomeScreen() {
       }
 
       if (Platform.OS === 'web' || !Location) {
-        // Default to Istanbul on web
         setLocation({ lat: 41.0082, lng: 28.9784 });
         setCityName('İstanbul');
         return { lat: 41.0082, lng: 28.9784 };
@@ -158,7 +150,6 @@ export default function HomeScreen() {
       const coords = { lat: loc.coords.latitude, lng: loc.coords.longitude };
       setLocation(coords);
 
-      // Reverse geocode to get city name
       try {
         const [address] = await Location.reverseGeocodeAsync({
           latitude: coords.lat,
@@ -187,7 +178,7 @@ export default function HomeScreen() {
         params: {
           latitude: coords.lat,
           longitude: coords.lng,
-          method: 13, // Turkey Diyanet
+          method: 13,
         },
       });
 
@@ -235,126 +226,175 @@ export default function HomeScreen() {
     return nextPrayer?.name === prayerName;
   };
 
+  const formatTimeUnit = (num: number) => {
+    return num.toString().padStart(2, '0');
+  };
+
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#D4AF37" />
+      <View style={styles.container}>
+        <SafeAreaView style={styles.loadingContainer}>
+          <View style={styles.loadingCircle}>
+            <ActivityIndicator size="large" color="#00BFA6" />
+          </View>
           <Text style={styles.loadingText}>{t.home.loading}</Text>
-        </View>
-      </SafeAreaView>
+        </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView
-        style={styles.scrollView}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#D4AF37" />
-        }
-      >
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.headerTop}>
-            <View style={styles.locationContainer}>
-              <Ionicons name="location" size={20} color="#D4AF37" />
-              <Text style={styles.locationText}>{cityName}</Text>
+    <View style={styles.container}>
+      <SafeAreaView style={styles.safeArea}>
+        <ScrollView
+          style={styles.scrollView}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#00BFA6" />
+          }
+        >
+          {/* Header */}
+          <View style={styles.header}>
+            <View style={styles.locationRow}>
+              <View style={styles.locationPill}>
+                <Ionicons name="location" size={16} color="#00BFA6" />
+                <Text style={styles.locationText}>{cityName}</Text>
+              </View>
+              <TouchableOpacity onPress={onRefresh} style={styles.refreshBtn}>
+                <Ionicons name="refresh" size={20} color="#fff" />
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity onPress={onRefresh} style={styles.refreshButton}>
-              <Ionicons name="refresh" size={22} color="#D4AF37" />
-            </TouchableOpacity>
+            
+            {prayerData && (
+              <View style={styles.dateSection}>
+                <Text style={styles.hijriDate}>☪ {prayerData.hijri_date}</Text>
+                <Text style={styles.gregorianDate}>{prayerData.date}</Text>
+              </View>
+            )}
           </View>
-          
-          {prayerData && (
-            <View style={styles.dateContainer}>
-              <Text style={styles.gregorianDate}>{prayerData.date}</Text>
-              <Text style={styles.hijriDate}>{prayerData.hijri_date}</Text>
-            </View>
-          )}
-        </View>
 
-        {/* Next Prayer Card */}
-        {nextPrayer && (
-          <View style={styles.nextPrayerCard}>
-            <View style={styles.nextPrayerHeader}>
-              <Ionicons name="notifications" size={24} color="#D4AF37" />
-              <Text style={styles.nextPrayerLabel}>{t.home.nextPrayer}</Text>
-            </View>
-            <Text style={styles.nextPrayerName}>{nextPrayer.name}</Text>
-            <Text style={styles.nextPrayerTime}>{nextPrayer.time}</Text>
-            <View style={styles.countdownContainer}>
-              <Ionicons name="time-outline" size={18} color="#8E8E93" />
-              <Text style={styles.countdownText}>{nextPrayer.remaining} {t.home.remaining}</Text>
-            </View>
-          </View>
-        )}
-
-        {/* Current Time */}
-        <View style={styles.currentTimeContainer}>
-          <Text style={styles.currentTimeLabel}>{t.home.currentTime}</Text>
-          <Text style={styles.currentTime}>
-            {currentTime.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-          </Text>
-        </View>
-
-        {/* Prayer Times List */}
-        <View style={styles.prayerListContainer}>
-          <Text style={styles.sectionTitle}>{t.home.dailyTimes}</Text>
-          {prayerTimes.map((prayer, index) => (
-            <View
-              key={index}
-              style={[
-                styles.prayerCard,
-                isCurrentPrayer(prayer.nameTr) && styles.prayerCardActive,
-              ]}
+          {/* Ana Saat Kartı */}
+          <View style={styles.mainCard}>
+            <LinearGradient
+              colors={['#1a3a2e', '#0d1f18']}
+              style={styles.clockGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
             >
-              <View style={styles.prayerLeft}>
-                <View style={[
-                  styles.iconContainer,
-                  isCurrentPrayer(prayer.nameTr) && styles.iconContainerActive,
-                ]}>
-                  <Ionicons
-                    name={prayer.icon}
-                    size={24}
-                    color={isCurrentPrayer(prayer.nameTr) ? '#1A1A2E' : '#D4AF37'}
-                  />
-                </View>
-                <View>
-                  <Text style={[
-                    styles.prayerName,
-                    isCurrentPrayer(prayer.nameTr) && styles.prayerNameActive,
-                  ]}>
-                    {prayer.nameTr}
+              {/* Şu anki saat */}
+              <Text style={styles.currentTimeLabel}>{t.home.currentTime}</Text>
+              <View style={styles.digitalClock}>
+                <View style={styles.timeSegment}>
+                  <Text style={styles.clockDigit}>
+                    {formatTimeUnit(currentTime.getHours())}
                   </Text>
-                  <Text style={styles.prayerNameEn}>{prayer.name}</Text>
+                </View>
+                <Text style={styles.clockSeparator}>:</Text>
+                <View style={styles.timeSegment}>
+                  <Text style={styles.clockDigit}>
+                    {formatTimeUnit(currentTime.getMinutes())}
+                  </Text>
+                </View>
+                <Text style={styles.clockSeparator}>:</Text>
+                <View style={styles.timeSegment}>
+                  <Text style={[styles.clockDigit, styles.clockSeconds]}>
+                    {formatTimeUnit(currentTime.getSeconds())}
+                  </Text>
                 </View>
               </View>
-              <Text style={[
-                styles.prayerTime,
-                isCurrentPrayer(prayer.nameTr) && styles.prayerTimeActive,
-              ]}>
-                {prayer.time}
-              </Text>
-            </View>
-          ))}
-        </View>
 
-        {error && (
-          <View style={styles.errorContainer}>
-            <Ionicons name="warning" size={24} color="#FF6B6B" />
-            <Text style={styles.errorText}>{error}</Text>
+              {/* Ayırıcı */}
+              <View style={styles.divider} />
+
+              {/* Sonraki namaz */}
+              {nextPrayer && (
+                <View style={styles.nextPrayerSection}>
+                  <View style={styles.nextPrayerHeader}>
+                    <Ionicons name="notifications" size={18} color="#00BFA6" />
+                    <Text style={styles.nextPrayerLabel}>{t.home.nextPrayer}</Text>
+                  </View>
+                  
+                  <Text style={styles.nextPrayerName}>{nextPrayer.name}</Text>
+                  <Text style={styles.nextPrayerTime}>{nextPrayer.time}</Text>
+
+                  {/* Geri sayım kutuları */}
+                  <View style={styles.countdownBoxes}>
+                    <View style={styles.countdownBox}>
+                      <Text style={styles.countdownNumber}>{formatTimeUnit(nextPrayer.hours)}</Text>
+                      <Text style={styles.countdownLabel}>Saat</Text>
+                    </View>
+                    <View style={styles.countdownBox}>
+                      <Text style={styles.countdownNumber}>{formatTimeUnit(nextPrayer.mins)}</Text>
+                      <Text style={styles.countdownLabel}>Dakika</Text>
+                    </View>
+                    <View style={styles.countdownBox}>
+                      <Text style={styles.countdownNumber}>{formatTimeUnit(nextPrayer.secs)}</Text>
+                      <Text style={styles.countdownLabel}>Saniye</Text>
+                    </View>
+                  </View>
+                </View>
+              )}
+            </LinearGradient>
           </View>
-        )}
-      </ScrollView>
-    </SafeAreaView>
+
+          {/* Namaz Vakitleri Listesi */}
+          <View style={styles.prayerListSection}>
+            <Text style={styles.sectionTitle}>{t.home.dailyTimes}</Text>
+            
+            <View style={styles.prayerGrid}>
+              {prayerTimes.map((prayer, index) => {
+                const isActive = isCurrentPrayer(prayer.nameTr);
+                return (
+                  <View
+                    key={index}
+                    style={[
+                      styles.prayerItem,
+                      isActive && styles.prayerItemActive,
+                    ]}
+                  >
+                    <View style={[styles.prayerIconWrap, isActive && styles.prayerIconWrapActive]}>
+                      <Ionicons
+                        name={prayer.icon}
+                        size={22}
+                        color={isActive ? '#121212' : '#00BFA6'}
+                      />
+                    </View>
+                    <View style={styles.prayerInfo}>
+                      <Text style={[styles.prayerName, isActive && styles.prayerNameActive]}>
+                        {prayer.nameTr}
+                      </Text>
+                      <Text style={styles.prayerNameEn}>{prayer.name}</Text>
+                    </View>
+                    <Text style={[styles.prayerTime, isActive && styles.prayerTimeActive]}>
+                      {prayer.time}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+
+          {error && (
+            <View style={styles.errorBox}>
+              <Ionicons name="warning" size={20} color="#FF6B6B" />
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          )}
+
+          <View style={{ height: 20 }} />
+        </ScrollView>
+      </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0F0F1A',
+    backgroundColor: '#121212',
+  },
+  safeArea: {
+    flex: 1,
   },
   scrollView: {
     flex: 1,
@@ -364,182 +404,246 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  loadingCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(0,191,166,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   loadingText: {
-    color: '#FFFFFF',
-    marginTop: 16,
+    color: '#fff',
     fontSize: 16,
+    marginTop: 20,
   },
+
   header: {
-    padding: 20,
+    paddingHorizontal: 20,
     paddingTop: 10,
+    paddingBottom: 15,
   },
-  headerTop: {
+  locationRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  locationContainer: {
+  locationPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,191,166,0.1)',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 6,
+  },
+  locationText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  refreshBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#1E1E1E',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dateSection: {
+    marginTop: 15,
+  },
+  hijriDate: {
+    color: '#00BFA6',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  gregorianDate: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 14,
+    marginTop: 4,
+  },
+
+  mainCard: {
+    marginHorizontal: 20,
+    borderRadius: 24,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(0,191,166,0.3)',
+  },
+  clockGradient: {
+    padding: 24,
+    alignItems: 'center',
+  },
+  currentTimeLabel: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 2,
+    marginBottom: 8,
+  },
+  digitalClock: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  locationText: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '600',
-    marginLeft: 8,
+  timeSegment: {
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
-  refreshButton: {
-    padding: 8,
+  clockDigit: {
+    color: '#00BFA6',
+    fontSize: 42,
+    fontWeight: '200',
+    fontVariant: ['tabular-nums'],
   },
-  dateContainer: {
-    marginTop: 12,
+  clockSeconds: {
+    color: 'rgba(0,191,166,0.6)',
+    fontSize: 36,
   },
-  gregorianDate: {
-    color: '#8E8E93',
-    fontSize: 14,
+  clockSeparator: {
+    color: '#00BFA6',
+    fontSize: 36,
+    fontWeight: '200',
+    marginHorizontal: 4,
   },
-  hijriDate: {
-    color: '#D4AF37',
-    fontSize: 16,
-    fontWeight: '500',
-    marginTop: 4,
+
+  divider: {
+    width: '80%',
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    marginVertical: 20,
   },
-  nextPrayerCard: {
-    backgroundColor: '#1A1A2E',
-    marginHorizontal: 20,
-    borderRadius: 20,
-    padding: 24,
+
+  nextPrayerSection: {
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#D4AF37',
-    shadowColor: '#D4AF37',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 5,
   },
   nextPrayerHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    gap: 6,
+    marginBottom: 8,
   },
   nextPrayerLabel: {
-    color: '#D4AF37',
-    fontSize: 14,
+    color: '#00BFA6',
+    fontSize: 13,
     fontWeight: '600',
-    marginLeft: 8,
-  },
-  nextPrayerName: {
-    color: '#FFFFFF',
-    fontSize: 32,
-    fontWeight: 'bold',
-  },
-  nextPrayerTime: {
-    color: '#D4AF37',
-    fontSize: 48,
-    fontWeight: 'bold',
-    marginTop: 8,
-  },
-  countdownContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 16,
-    backgroundColor: '#2D2D44',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  countdownText: {
-    color: '#8E8E93',
-    fontSize: 14,
-    marginLeft: 8,
-  },
-  currentTimeContainer: {
-    alignItems: 'center',
-    marginVertical: 20,
-  },
-  currentTimeLabel: {
-    color: '#8E8E93',
-    fontSize: 12,
-  },
-  currentTime: {
-    color: '#FFFFFF',
-    fontSize: 24,
-    fontWeight: '300',
-  },
-  prayerListContainer: {
-    paddingHorizontal: 20,
-    paddingBottom: 30,
-  },
-  sectionTitle: {
-    color: '#8E8E93',
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 16,
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
-  prayerCard: {
+  nextPrayerName: {
+    color: '#fff',
+    fontSize: 28,
+    fontWeight: '700',
+  },
+  nextPrayerTime: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 20,
+    fontWeight: '300',
+    marginTop: 4,
+  },
+  countdownBoxes: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#1A1A2E',
-    padding: 16,
+    gap: 12,
+    marginTop: 16,
+  },
+  countdownBox: {
+    backgroundColor: 'rgba(0,0,0,0.3)',
     borderRadius: 12,
-    marginBottom: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    alignItems: 'center',
+    minWidth: 70,
   },
-  prayerCardActive: {
-    backgroundColor: '#D4AF37',
+  countdownNumber: {
+    color: '#fff',
+    fontSize: 24,
+    fontWeight: '600',
+    fontVariant: ['tabular-nums'],
   },
-  prayerLeft: {
+  countdownLabel: {
+    color: 'rgba(255,255,255,0.4)',
+    fontSize: 10,
+    textTransform: 'uppercase',
+    marginTop: 2,
+  },
+
+  prayerListSection: {
+    paddingHorizontal: 20,
+    marginTop: 24,
+  },
+  sectionTitle: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 2,
+    marginBottom: 16,
+  },
+  prayerGrid: {
+    gap: 10,
+  },
+  prayerItem: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: '#1E1E1E',
+    borderRadius: 16,
+    padding: 14,
   },
-  iconContainer: {
+  prayerItemActive: {
+    backgroundColor: '#00BFA6',
+  },
+  prayerIconWrap: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#2D2D44',
+    backgroundColor: 'rgba(0,191,166,0.1)',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 14,
   },
-  iconContainerActive: {
-    backgroundColor: '#1A1A2E',
+  prayerIconWrapActive: {
+    backgroundColor: 'rgba(18,18,18,0.3)',
+  },
+  prayerInfo: {
+    flex: 1,
   },
   prayerName: {
-    color: '#FFFFFF',
-    fontSize: 18,
+    color: '#fff',
+    fontSize: 17,
     fontWeight: '600',
   },
   prayerNameActive: {
-    color: '#1A1A2E',
+    color: '#121212',
   },
   prayerNameEn: {
-    color: '#8E8E93',
+    color: 'rgba(255,255,255,0.4)',
     fontSize: 12,
     marginTop: 2,
   },
   prayerTime: {
-    color: '#D4AF37',
-    fontSize: 22,
-    fontWeight: 'bold',
+    color: '#00BFA6',
+    fontSize: 20,
+    fontWeight: '700',
   },
   prayerTimeActive: {
-    color: '#1A1A2E',
+    color: '#121212',
   },
-  errorContainer: {
+
+  errorBox: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 16,
     marginHorizontal: 20,
-    backgroundColor: '#2D1A1A',
+    marginTop: 20,
+    padding: 16,
+    backgroundColor: 'rgba(255,107,107,0.1)',
     borderRadius: 12,
+    gap: 8,
   },
   errorText: {
     color: '#FF6B6B',
-    marginLeft: 8,
     fontSize: 14,
   },
 });
