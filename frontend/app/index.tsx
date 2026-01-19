@@ -382,6 +382,9 @@ export default function HomeScreen() {
             </View>
           )}
 
+          {/* Banner Reklam */}
+          <BannerAdComponent style={{ marginTop: 10, marginBottom: 10 }} />
+
           <View style={{ height: 20 }} />
         </ScrollView>
       </SafeAreaView>
