@@ -10,13 +10,19 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
+      "bundleIdentifier": "com.namazvakitleri.app",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Shows prayer times for your location",
         "NSLocationAlwaysUsageDescription": "Provides accurate prayer time notifications",
-        "NSMotionUsageDescription": "Qibla compass requires motion sensors"
+        "NSMotionUsageDescription": "Qibla compass requires motion sensors",
+        "GADApplicationIdentifier": "ca-app-pub-7614997391820254~2717321696",
+        "SKAdNetworkItems": [
+          { "SKAdNetworkIdentifier": "cstr6suwn9.skadnetwork" }
+        ]
       }
     },
     "android": {
+      "package": "com.namazvakitleri.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#0F0F1A"
@@ -27,7 +33,8 @@
         "ACCESS_COARSE_LOCATION",
         "VIBRATE",
         "RECEIVE_BOOT_COMPLETED",
-        "SCHEDULE_EXACT_ALARM"
+        "SCHEDULE_EXACT_ALARM",
+        "com.google.android.gms.permission.AD_ID"
       ]
     },
     "web": {
@@ -44,6 +51,13 @@
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#000"
+        }
+      ],
+      [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-7614997391820254~2717321696",
+          "iosAppId": "ca-app-pub-7614997391820254~2717321696"
         }
       ]
     ],
