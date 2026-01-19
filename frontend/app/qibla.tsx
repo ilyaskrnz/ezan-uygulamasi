@@ -8,13 +8,12 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   Dimensions,
-  Alert,
   ScrollView,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useLanguage } from '../src/i18n/LanguageContext';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 let Location: any = null;
 let Magnetometer: any = null;
@@ -26,51 +25,85 @@ if (Platform.OS !== 'web') {
 }
 
 const { width } = Dimensions.get('window');
-const COMPASS_SIZE = Math.min(width - 60, 280);
+const COMPASS_SIZE = Math.min(width - 40, 300);
 
+// Kabe koordinatları (kesin değerler)
 const KAABA_LAT = 21.4225;
-const KAABA_LNG = 39.8262;
+const KAABA_LNG = 39.8264;
 
 export default function QiblaScreen() {
   const { t } = useLanguage();
-  const [heading, setHeading] = useState(0);
-  const [qiblaDirection, setQiblaDirection] = useState<number | null>(null);
+  const [magnetometer, setMagnetometer] = useState(0);
+  const [qiblad, setQiblad] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [distance, setDistance] = useState<number | null>(null);
-  const [calibrationOffset, setCalibrationOffset] = useState(0);
   
   const compassAnim = useRef(new Animated.Value(0)).current;
+  const kaabaAnim = useRef(new Animated.Value(0)).current;
   const [subscription, setSubscription] = useState<any>(null);
 
   useEffect(() => {
-    loadCalibration();
-    initializeQibla();
+    initCompass();
     return () => {
       if (subscription) subscription.remove();
     };
   }, []);
 
+  // Pusula dönüşü için animasyon
   useEffect(() => {
-    const finalHeading = (heading + calibrationOffset + 360) % 360;
+    const compassRotate = 360 - compassDegree;
     Animated.timing(compassAnim, {
-      toValue: finalHeading,
-      duration: 150,
+      toValue: compassRotate,
+      duration: 100,
       useNativeDriver: true,
     }).start();
-  }, [heading, calibrationOffset]);
+  }, [magnetometer]);
 
-  const loadCalibration = async () => {
-    try {
-      const saved = await AsyncStorage.getItem('qibla_calibration');
-      if (saved) setCalibrationOffset(parseFloat(saved));
-    } catch (e) {}
+  // Kabe dönüşü için animasyon
+  useEffect(() => {
+    const kaabaRotate = 360 - compassDegree + qiblad;
+    Animated.timing(kaabaAnim, {
+      toValue: kaabaRotate,
+      duration: 100,
+      useNativeDriver: true,
+    }).start();
+  }, [magnetometer, qiblad]);
+
+  // GitHub projesinden alınan açı hesaplama fonksiyonu
+  const angle = (data: { x: number; y: number; z: number }) => {
+    let angle = 0;
+    if (data) {
+      let { x, y } = data;
+      if (Math.atan2(y, x) >= 0) {
+        angle = Math.atan2(y, x) * (180 / Math.PI);
+      } else {
+        angle = (Math.atan2(y, x) + 2 * Math.PI) * (180 / Math.PI);
+      }
+    }
+    return Math.round(angle);
   };
 
-  const saveCalibration = async (offset: number) => {
-    try {
-      await AsyncStorage.setItem('qibla_calibration', offset.toString());
-    } catch (e) {}
+  // GitHub projesinden alınan derece hesaplama
+  const degree = (magnetometer: number) => {
+    return magnetometer - 90 >= 0 ? magnetometer - 90 : magnetometer + 271;
+  };
+
+  // GitHub projesinden alınan kıble hesaplama
+  const calculateQibla = (latitude: number, longitude: number) => {
+    const PI = Math.PI;
+    let latk = (KAABA_LAT * PI) / 180.0;
+    let longk = (KAABA_LNG * PI) / 180.0;
+    let phi = (latitude * PI) / 180.0;
+    let lambda = (longitude * PI) / 180.0;
+    let qiblad =
+      (180.0 / PI) *
+      Math.atan2(
+        Math.sin(longk - lambda),
+        Math.cos(phi) * Math.tan(latk) -
+          Math.sin(phi) * Math.cos(longk - lambda)
+      );
+    setQiblad(qiblad);
   };
 
   const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
@@ -84,21 +117,7 @@ export default function QiblaScreen() {
     return R * c;
   };
 
-  const calculateQiblaDirection = (lat: number, lng: number): number => {
-    const latRad = lat * Math.PI / 180;
-    const lngRad = lng * Math.PI / 180;
-    const kaabaLatRad = KAABA_LAT * Math.PI / 180;
-    const kaabaLngRad = KAABA_LNG * Math.PI / 180;
-    
-    const y = Math.sin(kaabaLngRad - lngRad);
-    const x = Math.cos(latRad) * Math.tan(kaabaLatRad) - 
-              Math.sin(latRad) * Math.cos(kaabaLngRad - lngRad);
-    
-    let qibla = Math.atan2(y, x) * 180 / Math.PI;
-    return ((qibla % 360) + 360) % 360;
-  };
-
-  const initializeQibla = async () => {
+  const initCompass = async () => {
     if (Platform.OS === 'web') {
       setError('Bu özellik sadece mobil cihazlarda çalışır');
       setLoading(false);
@@ -106,7 +125,21 @@ export default function QiblaScreen() {
     }
 
     try {
-      setLoading(true);
+      // Manyetometre kontrolü
+      if (!Magnetometer) {
+        setError('Pusula bu cihazda kullanılamıyor');
+        setLoading(false);
+        return;
+      }
+
+      const isAvailable = await Magnetometer.isAvailableAsync();
+      if (!isAvailable) {
+        setError('Pusula bu cihazda kullanılamıyor');
+        setLoading(false);
+        return;
+      }
+
+      // Konum izni
       if (!Location) {
         setError(t.qibla.permissionRequired);
         setLoading(false);
@@ -120,12 +153,21 @@ export default function QiblaScreen() {
         return;
       }
 
+      // Konum al
       const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-      const coords = { lat: loc.coords.latitude, lng: loc.coords.longitude };
+      const { latitude, longitude } = loc.coords;
       
-      setQiblaDirection(calculateQiblaDirection(coords.lat, coords.lng));
-      setDistance(Math.round(calculateDistance(coords.lat, coords.lng, KAABA_LAT, KAABA_LNG)));
-      startMagnetometer();
+      // Kıble yönünü hesapla
+      calculateQibla(latitude, longitude);
+      setDistance(Math.round(calculateDistance(latitude, longitude, KAABA_LAT, KAABA_LNG)));
+      
+      // Manyetometreyi başlat
+      Magnetometer.setUpdateInterval(100);
+      const sub = Magnetometer.addListener((data: { x: number; y: number; z: number }) => {
+        setMagnetometer(angle(data));
+      });
+      setSubscription(sub);
+      
       setLoading(false);
     } catch (err) {
       setError(t.qibla.error);
@@ -133,61 +175,46 @@ export default function QiblaScreen() {
     }
   };
 
-  const startMagnetometer = () => {
-    if (!Magnetometer) return;
-    Magnetometer.setUpdateInterval(100);
-    
-    const sub = Magnetometer.addListener((data: { x: number; y: number; z: number }) => {
-      let angle = Math.atan2(data.y, data.x) * (180 / Math.PI);
-      angle = ((90 - angle) % 360 + 360) % 360;
-      setHeading(angle);
-    });
-    
-    setSubscription(sub);
+  // Hesaplanmış değerler
+  const compassDegree = degree(magnetometer);
+  const compassRotate = 360 - compassDegree;
+  const kaabaRotate = 360 - compassDegree + qiblad;
+
+  // Yön metni
+  const getDirectionName = (deg: number) => {
+    if (deg >= 337.5 || deg < 22.5) return 'Kuzey';
+    if (deg >= 22.5 && deg < 67.5) return 'Kuzeydoğu';
+    if (deg >= 67.5 && deg < 112.5) return 'Doğu';
+    if (deg >= 112.5 && deg < 157.5) return 'Güneydoğu';
+    if (deg >= 157.5 && deg < 202.5) return 'Güney';
+    if (deg >= 202.5 && deg < 247.5) return 'Güneybatı';
+    if (deg >= 247.5 && deg < 292.5) return 'Batı';
+    return 'Kuzeybatı';
   };
 
-  const getCurrentHeading = () => ((heading + calibrationOffset) % 360 + 360) % 360;
-
-  const getQiblaRelativeAngle = () => {
-    if (qiblaDirection === null) return 0;
-    return ((qiblaDirection - getCurrentHeading()) % 360 + 360) % 360;
-  };
-
+  // Kıbleye dönük mü?
   const isPointingToQibla = (): boolean => {
-    const angle = getQiblaRelativeAngle();
-    return angle < 15 || angle > 345;
+    const qiblaAngle = ((qiblad % 360) + 360) % 360;
+    return compassDegree >= Math.round(qiblaAngle - 5) && compassDegree <= Math.round(qiblaAngle + 5);
   };
 
   const getDirectionText = (): string => {
-    if (qiblaDirection === null) return '';
-    const angle = getQiblaRelativeAngle();
+    const qiblaAngle = ((qiblad % 360) + 360) % 360;
+    const diff = ((qiblaAngle - compassDegree + 540) % 360) - 180;
     
-    if (angle < 15 || angle > 345) return '✓ Kıble Yönündesiniz!';
-    if (angle <= 180) return `→ Sağa ${angle.toFixed(0)}° dönün`;
-    return `← Sola ${(360 - angle).toFixed(0)}° dönün`;
-  };
-
-  const adjustCalibration = (amount: number) => {
-    const newOffset = calibrationOffset + amount;
-    setCalibrationOffset(newOffset);
-    saveCalibration(newOffset);
-  };
-
-  const resetCalibration = () => {
-    setCalibrationOffset(0);
-    saveCalibration(0);
-  };
-
-  const setAsNorth = () => {
-    const newOffset = -heading;
-    setCalibrationOffset(newOffset);
-    saveCalibration(newOffset);
-    Alert.alert('Kalibrasyon', 'Kuzey yönü ayarlandı!');
+    if (Math.abs(diff) <= 5) return '✓ Kıble Yönündesiniz!';
+    if (diff > 0) return `→ Sağa ${Math.abs(Math.round(diff))}° dönün`;
+    return `← Sola ${Math.abs(Math.round(diff))}° dönün`;
   };
 
   const compassRotation = compassAnim.interpolate({
     inputRange: [0, 360],
-    outputRange: ['0deg', '-360deg'],
+    outputRange: ['0deg', '360deg'],
+  });
+
+  const kaabaRotation = kaabaAnim.interpolate({
+    inputRange: [0, 360],
+    outputRange: ['0deg', '360deg'],
   });
 
   if (loading) {
